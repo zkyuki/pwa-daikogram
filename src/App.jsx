@@ -292,7 +292,7 @@ export default function App() {
     const inactiveColor = isDark ? "rgba(235,235,245,0.50)" : "rgba(60,60,67,0.50)";
 
     return (
-      <div style={{ ...glassStyle, display: "flex", paddingTop: 8, paddingBottom: "max(22px, env(safe-area-inset-bottom))", position: "relative", zIndex: 10 }}>
+      <div style={{ ...glassStyle, display: "flex", paddingTop: 8, paddingBottom: "max(22px, env(safe-area-inset-bottom, 0px))", position: "relative", zIndex: 10, flexShrink: 0 }}>
         {tabs.map(t => {
           const active = (t.id === "home" ? tab === "home" : tab === t.id) && !chatOpen && !portfolioOpen && !perpOpen && !agentOpen && !notifOpen && !discoveryOpen && !leaderboardOpen;
           const iconFill   = active ? TG : "none";
@@ -1759,7 +1759,7 @@ export default function App() {
         ref={el => { if (el) el.style.cssText += "; view-transition-name: screen;"; }}
         style={{
           display: "flex", flexDirection: "column",
-          height: "100dvh", background: "#fff",
+          height: "100%", background: "#fff",
           paddingTop: "env(safe-area-inset-top, 44px)"
         }}
       >
@@ -1843,7 +1843,7 @@ export default function App() {
         ref={el => { if (el) el.style.cssText += "; view-transition-name: screen;"; }}
         style={{
           display: "flex", flexDirection: "column",
-          height: "100dvh", background: "#fff",
+          height: "100%", background: "#fff",
           paddingTop: "env(safe-area-inset-top, 44px)"
         }}
       >
@@ -1950,7 +1950,7 @@ export default function App() {
   };
 
   return (
-    <div style={{ width: "100dvw", height: "100dvh", background: T.bg, fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif', display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
+    <div style={{ width: "100%", height: "100%", background: T.bg, fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif', display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
       {!authenticated ? (
         <AuthScreen />
       ) : (
