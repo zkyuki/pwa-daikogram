@@ -187,9 +187,7 @@ export default function App() {
   const [notifFilter, setNotifFilter] = useState("all");
   const [scrollToMsg, setScrollToMsg] = useState(null); // 'call1'|'call2'|'call3'
   const [theme, setTheme] = useState("light"); // "light" | "dark"
-  const [authenticated, setAuthenticated] = useState(
-    () => localStorage.getItem("daikogram_auth") === "true"
-  );
+  const [authenticated, setAuthenticated] = useState(false);
   const [authStep, setAuthStep] = useState("phone"); // "phone" | "code"
   const [authPhone, setAuthPhone] = useState("");
 
@@ -1744,7 +1742,6 @@ export default function App() {
 
     const completeAuth = () => {
       navigate(() => {
-        localStorage.setItem("daikogram_auth", "true");
         setAuthenticated(true);
         setTab("chats");
       }, "push");
