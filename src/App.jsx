@@ -293,7 +293,7 @@ export default function App() {
     const inactiveColor = isDark ? "rgba(235,235,245,0.50)" : "rgba(60,60,67,0.50)";
 
     return (
-      <div style={{ ...glassStyle, display: "flex", paddingTop: 8, paddingBottom: "env(safe-area-inset-bottom, 0px)", position: "relative", zIndex: 10, flexShrink: 0 }}>
+      <div style={{ ...glassStyle, display: "flex", paddingTop: 8, paddingBottom: "max(16px, env(safe-area-inset-bottom, 16px))", position: "relative", zIndex: 10, flexShrink: 0 }}>
         {tabs.map(t => {
           const active = (t.id === "home" ? tab === "home" : tab === t.id) && !chatOpen && !portfolioOpen && !perpOpen && !agentOpen && !notifOpen && !discoveryOpen && !leaderboardOpen;
           const iconFill   = active ? TG : "none";
@@ -330,7 +330,7 @@ export default function App() {
     { name: "Saved Messages", avatar: "🔖", bg: TG, msg: "debot-query", time: "Wed", pinned: true },
   ];
   const ChatsListScreen = () => (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: isDark ? "#000" : "#fff" }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: isDark ? "#000" : "#fff" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 16px 4px", background: T.headerBg }}>
         <div style={{ fontSize: 17, padding: "6px 14px", background: T.bg2, borderRadius: 18, color: T.text }}>Edit</div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -1500,7 +1500,7 @@ export default function App() {
   // ═══════════════════════════════════════
   const ContactsScreen = () => {
     return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: T.bg }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: T.bg }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 16px 4px", background: T.headerBg }}>
         <div style={{ fontSize: 17, padding: "6px 14px", background: T.bg2, borderRadius: 18, color: T.text }}>Sort</div>
         <span style={{ fontSize: 17, fontWeight: 600, color: T.text }}>Contacts</span>
@@ -1569,7 +1569,7 @@ export default function App() {
     );
 
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%", background: T.bg }}>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: T.bg }}>
         {/* Header — matches screenshot: Edit left, All|Missed center pill, empty right */}
         <div style={{ display: "flex", alignItems: "center", padding: "8px 16px 8px", background: T.bg, gap: 0 }}>
           <div style={{ fontSize: 16, padding: "5px 16px", background: T.bg2, borderRadius: 20, color: T.text, cursor: "pointer", fontWeight: 400 }}>Edit</div>
