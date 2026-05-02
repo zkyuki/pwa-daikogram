@@ -68,51 +68,69 @@ if (typeof document !== "undefined" && !document.getElementById("vt-styles")) {
 }
 
 // ─── Rubber-Band Scroll Hook ───────────────────────────────────
+// containerRef → scroll container (overflow auto)
+// innerRef     → content wrapper inside — transform applied here, not on container
+//                so flex layout (and nav bar position) is never disturbed.
+// All listeners are passive → native iOS PWA scroll is not blocked.
+// edgeHitY tracks the finger position at the moment the list edge was reached,
+// so rubber-band amount is only the EXTRA pull past the edge, not total drag.
 const useRubberBandScroll = () => {
-  const ref = useRef(null);
+  const containerRef = useRef(null);
+  const innerRef = useRef(null);
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+    const el = containerRef.current;
+    const inner = innerRef.current;
+    if (!el || !inner) return;
     let startY = 0;
     let pulling = false;
+    let edgeHitY = null;
 
     const onTouchStart = (e) => {
       startY = e.touches[0].clientY;
       pulling = false;
-      el.style.transition = "";
+      edgeHitY = null;
+      inner.style.transition = "";
     };
     const onTouchMove = (e) => {
-      const dy = e.touches[0].clientY - startY;
-      const atTop = el.scrollTop <= 0;
+      const cy = e.touches[0].clientY;
+      const atTop    = el.scrollTop <= 0;
       const atBottom = el.scrollTop >= el.scrollHeight - el.clientHeight - 1;
-      if ((atTop && dy > 0) || (atBottom && dy < 0)) {
-        pulling = true;
-        e.preventDefault();
-        const dir = atTop ? 1 : -1;
-        const amount = Math.min(Math.abs(dy) * 0.38, 88) * dir;
-        el.style.transform = `translateY(${amount}px)`;
-      } else if (!pulling) {
-        el.style.transform = "";
+      const pullDown = atTop    && cy > startY;
+      const pullUp   = atBottom && cy < startY;
+
+      if (pullDown || pullUp) {
+        if (!pulling) { pulling = true; edgeHitY = cy; }
+        // overscroll = how far past the edge the finger has moved
+        const over = cy - edgeHitY;
+        const dir  = pullDown ? 1 : -1;
+        const px   = Math.min(Math.abs(over) * 0.38, 72) * dir;
+        inner.style.transform = `translateY(${px}px)`;
+      } else if (pulling) {
+        // Reversed back into scrollable range — snap back immediately
+        pulling = false; edgeHitY = null;
+        inner.style.transition = "transform 0.2s ease-out";
+        inner.style.transform  = "";
       }
     };
     const onTouchEnd = () => {
-      pulling = false;
-      el.style.transition = "transform 0.45s cubic-bezier(0.23, 1, 0.32, 1)";
-      el.style.transform = "translateY(0)";
+      pulling = false; edgeHitY = null;
+      inner.style.transition = "transform 0.45s cubic-bezier(0.23, 1, 0.32, 1)";
+      inner.style.transform  = "";
     };
 
-    el.addEventListener("touchstart", onTouchStart, { passive: true });
-    el.addEventListener("touchmove", onTouchMove, { passive: false });
-    el.addEventListener("touchend", onTouchEnd, { passive: true });
-    el.addEventListener("touchcancel", onTouchEnd, { passive: true });
+    // All passive — never blocks native scroll
+    el.addEventListener("touchstart",  onTouchStart, { passive: true });
+    el.addEventListener("touchmove",   onTouchMove,  { passive: true });
+    el.addEventListener("touchend",    onTouchEnd,   { passive: true });
+    el.addEventListener("touchcancel", onTouchEnd,   { passive: true });
     return () => {
-      el.removeEventListener("touchstart", onTouchStart);
-      el.removeEventListener("touchmove", onTouchMove);
-      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("touchstart",  onTouchStart);
+      el.removeEventListener("touchmove",   onTouchMove);
+      el.removeEventListener("touchend",    onTouchEnd);
       el.removeEventListener("touchcancel", onTouchEnd);
     };
   }, []);
-  return ref;
+  return { containerRef, innerRef };
 };
 
 const TG = "#3390EC";
@@ -377,7 +395,7 @@ export default function App() {
     { name: "Saved Messages", avatar: "🔖", bg: TG, msg: "debot-query", time: "Wed", pinned: true },
   ];
   const ChatsListScreen = () => {
-    const scrollRef = useRubberBandScroll();
+    const { containerRef, innerRef } = useRubberBandScroll();
     return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: isDark ? "#000" : "#fff" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 16px 4px", background: T.headerBg }}>
@@ -405,7 +423,8 @@ export default function App() {
           <div key={f} style={{ padding: "4px 14px", fontSize: 14, fontWeight: i===0?600:400, color: i===0?TG:T.text2, borderBottom: i===0?`2px solid ${TG}`:"none", whiteSpace: "nowrap", cursor: "pointer" }}>{f}</div>
         ))}
       </div>
-      <div ref={scrollRef} style={{ flex: 1, overflowY: "auto" }}>
+      <div ref={containerRef} style={{ flex: 1, overflowY: "auto" }}>
+        <div ref={innerRef}>
         {chatList.map((c,i) => (
           <div key={i} onClick={() => goChat(c.name)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 16px", cursor: "pointer", background: T.card }}>
             <div style={{ width: 56, height: 56, borderRadius: 28, background: c.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: c.avatar.length > 1 ? 22 : 24, color: "#fff", fontWeight: 700, flexShrink: 0 }}>{c.avatar}</div>
@@ -422,6 +441,7 @@ export default function App() {
             </div>
           </div>
         ))}
+        </div>
       </div>
     </div>
   ); };
@@ -1548,7 +1568,7 @@ export default function App() {
   // CONTACTS
   // ═══════════════════════════════════════
   const ContactsScreen = () => {
-    const scrollRef = useRubberBandScroll();
+    const { containerRef, innerRef } = useRubberBandScroll();
     return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: T.bg }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 16px 4px", background: T.headerBg }}>
@@ -1562,17 +1582,19 @@ export default function App() {
           <span style={{ fontSize: 16, color: T.text2 }}>Search</span>
         </div>
       </div>
-      <div style={{ padding: "8px 16px", display: "flex", alignItems: "center", gap: 10, borderBottom: "0.5px solid #C6C6C830" }}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={TG} strokeWidth="1.5"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
-        <span style={{ fontSize: 17, color: TG }}>Invite Friends</span>
-      </div>
-      <div ref={scrollRef} style={{ flex: 1, overflowY: "auto" }}>
+      <div ref={containerRef} style={{ flex: 1, overflowY: "auto" }}>
+        <div ref={innerRef}>
+        <div style={{ padding: "8px 16px", display: "flex", alignItems: "center", gap: 10, borderBottom: "0.5px solid #C6C6C830" }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={TG} strokeWidth="1.5"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          <span style={{ fontSize: 17, color: TG }}>Invite Friends</span>
+        </div>
         {[["Alex | Superteam","4 min ago","#E91E63"],["Noah ⭐","6 min ago","#4CAF50"],["Ryan | Windfall Capital","57 min ago","#FF9800"],["SEN UHI","1 hour ago","#00BCD4"],["Mike Eidlin 🧿","1 hour ago","#9C27B0"]].map(([n,t,c]) => (
           <div key={n} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", borderBottom: `0.5px solid ${T.border}`, background: T.card }}>
             <div style={{ width: 44, height: 44, borderRadius: 22, background: c, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 18 }}>{n[0]}</div>
             <div><div style={{ fontSize: 16.5, fontWeight: 500, color: T.text }}>{n}</div><div style={{ fontSize: 14, color: "#8E8E93" }}>last seen {t}</div></div>
           </div>
         ))}
+        </div>
       </div>
     </div>
   ); };
@@ -1582,7 +1604,7 @@ export default function App() {
   // ═══════════════════════════════════════
   const CallsScreen = () => {
     const [callFilter, setCallFilter] = useState("All");
-    const scrollRef = useRubberBandScroll();
+    const { containerRef, innerRef } = useRubberBandScroll();
     const callData = [
       { name: "Ryan | Windfall Capital", sub: "Outgoing (8 sec)", date: "Mon", c: "#5C6BC0", type: "out", missed: false },
       { name: "Alex | Superteam", sub: "Incoming (39 min)", date: "05/16/25", c: "#E91E63", type: "in", missed: false },
@@ -1634,7 +1656,8 @@ export default function App() {
           <div style={{ width: 60 }} />
         </div>
 
-        <div ref={scrollRef} style={{ flex: 1, overflowY: "auto" }}>
+        <div ref={containerRef} style={{ flex: 1, overflowY: "auto" }}>
+          <div ref={innerRef}>
           {/* Start New Call — matches screenshot: phone icon left in TG blue, text right */}
           <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 16px 10px", background: T.bg, borderBottom: `0.5px solid ${T.border}`, cursor: "pointer" }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={TG} strokeWidth="1.8" strokeLinecap="round">
@@ -1668,6 +1691,7 @@ export default function App() {
               </div>
             </div>
           ))}
+          </div>
         </div>
       </div>
     );
