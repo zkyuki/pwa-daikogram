@@ -67,6 +67,54 @@ if (typeof document !== "undefined" && !document.getElementById("vt-styles")) {
   document.head.appendChild(el);
 }
 
+// ─── Rubber-Band Scroll Hook ───────────────────────────────────
+const useRubberBandScroll = () => {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let startY = 0;
+    let pulling = false;
+
+    const onTouchStart = (e) => {
+      startY = e.touches[0].clientY;
+      pulling = false;
+      el.style.transition = "";
+    };
+    const onTouchMove = (e) => {
+      const dy = e.touches[0].clientY - startY;
+      const atTop = el.scrollTop <= 0;
+      const atBottom = el.scrollTop >= el.scrollHeight - el.clientHeight - 1;
+      if ((atTop && dy > 0) || (atBottom && dy < 0)) {
+        pulling = true;
+        e.preventDefault();
+        const dir = atTop ? 1 : -1;
+        const amount = Math.min(Math.abs(dy) * 0.38, 88) * dir;
+        el.style.transform = `translateY(${amount}px)`;
+      } else if (!pulling) {
+        el.style.transform = "";
+      }
+    };
+    const onTouchEnd = () => {
+      pulling = false;
+      el.style.transition = "transform 0.45s cubic-bezier(0.23, 1, 0.32, 1)";
+      el.style.transform = "translateY(0)";
+    };
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+    el.addEventListener("touchcancel", onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, []);
+  return ref;
+};
+
 const TG = "#3390EC";
 const BG = "#EFEFF4";
 const GREEN = "#34C759";
@@ -328,7 +376,9 @@ export default function App() {
     { name: "DeFi Alpha", avatar: "💎", bg: "linear-gradient(135deg,#00BCD4,#7C4DFF)", msg: "Rose: yield farm update…", time: "19:42", unread: 156, muted: true },
     { name: "Saved Messages", avatar: "🔖", bg: TG, msg: "debot-query", time: "Wed", pinned: true },
   ];
-  const ChatsListScreen = () => (
+  const ChatsListScreen = () => {
+    const scrollRef = useRubberBandScroll();
+    return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: isDark ? "#000" : "#fff" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 16px 4px", background: T.headerBg }}>
         <div style={{ fontSize: 17, padding: "6px 14px", background: T.bg2, borderRadius: 18, color: T.text }}>Edit</div>
@@ -355,7 +405,7 @@ export default function App() {
           <div key={f} style={{ padding: "4px 14px", fontSize: 14, fontWeight: i===0?600:400, color: i===0?TG:T.text2, borderBottom: i===0?`2px solid ${TG}`:"none", whiteSpace: "nowrap", cursor: "pointer" }}>{f}</div>
         ))}
       </div>
-      <div style={{ flex: 1, overflowY: "auto" }}>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: "auto" }}>
         {chatList.map((c,i) => (
           <div key={i} onClick={() => goChat(c.name)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 16px", cursor: "pointer", background: T.card }}>
             <div style={{ width: 56, height: 56, borderRadius: 28, background: c.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: c.avatar.length > 1 ? 22 : 24, color: "#fff", fontWeight: 700, flexShrink: 0 }}>{c.avatar}</div>
@@ -374,7 +424,7 @@ export default function App() {
         ))}
       </div>
     </div>
-  );
+  ); };
 
   // ═══════════════════════════════════════
   // CHAT VIEW
@@ -1497,7 +1547,9 @@ export default function App() {
   // ═══════════════════════════════════════
   // CONTACTS
   // ═══════════════════════════════════════
-  const ContactsScreen = () => (
+  const ContactsScreen = () => {
+    const scrollRef = useRubberBandScroll();
+    return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: T.bg }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 16px 4px", background: T.headerBg }}>
         <div style={{ fontSize: 17, padding: "6px 14px", background: T.bg2, borderRadius: 18, color: T.text }}>Sort</div>
@@ -1514,7 +1566,7 @@ export default function App() {
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={TG} strokeWidth="1.5"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
         <span style={{ fontSize: 17, color: TG }}>Invite Friends</span>
       </div>
-      <div style={{ flex: 1, overflowY: "auto" }}>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: "auto" }}>
         {[["Alex | Superteam","4 min ago","#E91E63"],["Noah ⭐","6 min ago","#4CAF50"],["Ryan | Windfall Capital","57 min ago","#FF9800"],["SEN UHI","1 hour ago","#00BCD4"],["Mike Eidlin 🧿","1 hour ago","#9C27B0"]].map(([n,t,c]) => (
           <div key={n} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", borderBottom: `0.5px solid ${T.border}`, background: T.card }}>
             <div style={{ width: 44, height: 44, borderRadius: 22, background: c, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 18 }}>{n[0]}</div>
@@ -1523,13 +1575,14 @@ export default function App() {
         ))}
       </div>
     </div>
-  );
+  ); };
 
   // ═══════════════════════════════════════
   // CALLS (Screenshot-accurate)
   // ═══════════════════════════════════════
   const CallsScreen = () => {
     const [callFilter, setCallFilter] = useState("All");
+    const scrollRef = useRubberBandScroll();
     const callData = [
       { name: "Ryan | Windfall Capital", sub: "Outgoing (8 sec)", date: "Mon", c: "#5C6BC0", type: "out", missed: false },
       { name: "Alex | Superteam", sub: "Incoming (39 min)", date: "05/16/25", c: "#E91E63", type: "in", missed: false },
@@ -1581,7 +1634,7 @@ export default function App() {
           <div style={{ width: 60 }} />
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto" }}>
+        <div ref={scrollRef} style={{ flex: 1, overflowY: "auto" }}>
           {/* Start New Call — matches screenshot: phone icon left in TG blue, text right */}
           <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 16px 10px", background: T.bg, borderBottom: `0.5px solid ${T.border}`, cursor: "pointer" }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={TG} strokeWidth="1.8" strokeLinecap="round">
