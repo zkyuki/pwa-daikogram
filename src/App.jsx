@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 
 // ─── View Transition CSS ───────────────────────────────────────
 const VT_STYLES = `
@@ -187,6 +187,11 @@ export default function App() {
   const [notifFilter, setNotifFilter] = useState("all");
   const [scrollToMsg, setScrollToMsg] = useState(null); // 'call1'|'call2'|'call3'
   const [theme, setTheme] = useState("light"); // "light" | "dark"
+  const [authenticated, setAuthenticated] = useState(
+    () => localStorage.getItem("daikogram_auth") === "true"
+  );
+  const [authStep, setAuthStep] = useState("phone"); // "phone" | "code"
+  const [authPhone, setAuthPhone] = useState("");
 
   const showToast = (m) => { setToast({ message: m, visible: true }); setTimeout(() => setToast(t => ({ ...t, visible: false })), 2200); };
 
@@ -1692,6 +1697,239 @@ export default function App() {
   };
 
   // ═══════════════════════════════════════
+  // AUTH SCREEN
+  // ═══════════════════════════════════════
+  const AuthScreen = () => {
+    const [phone, setPhone] = useState("");
+    const [code, setCode] = useState(["", "", "", "", ""]);
+    const [timer, setTimer] = useState(60);
+    const [timerActive, setTimerActive] = useState(false);
+    const codeRef0 = useRef(null);
+    const codeRef1 = useRef(null);
+    const codeRef2 = useRef(null);
+    const codeRef3 = useRef(null);
+    const codeRef4 = useRef(null);
+    const codeRefs = [codeRef0, codeRef1, codeRef2, codeRef3, codeRef4];
+
+    useEffect(() => {
+      if (!timerActive || timer <= 0) return;
+      const id = setTimeout(() => setTimer(t => t - 1), 1000);
+      return () => clearTimeout(id);
+    }, [timer, timerActive]);
+
+    const handleNext = () => {
+      if (phone.length < 7) return;
+      setAuthPhone(phone);
+      navigate(() => setAuthStep("code"), "push");
+      setTimeout(() => codeRef0.current?.focus(), 320);
+      setTimerActive(true);
+    };
+
+    const handleCodeChange = (idx, val) => {
+      if (!/^\d?$/.test(val)) return;
+      const next = [...code];
+      next[idx] = val;
+      setCode(next);
+      if (val && idx < 4) codeRefs[idx + 1].current?.focus();
+      if (next.every(d => d !== "")) {
+        setTimeout(() => completeAuth(), 150);
+      }
+    };
+
+    const handleCodeKeyDown = (idx, e) => {
+      if (e.key === "Backspace" && !code[idx] && idx > 0) {
+        codeRefs[idx - 1].current?.focus();
+      }
+    };
+
+    const completeAuth = () => {
+      navigate(() => {
+        localStorage.setItem("daikogram_auth", "true");
+        setAuthenticated(true);
+        setTab("chats");
+      }, "push");
+    };
+
+    const resendCode = () => {
+      setTimer(60);
+      setTimerActive(true);
+      setCode(["", "", "", "", ""]);
+      setTimeout(() => codeRef0.current?.focus(), 100);
+    };
+
+    if (authStep === "phone") return (
+      <div
+        ref={el => { if (el) el.style.cssText += "; view-transition-name: screen;"; }}
+        style={{
+          display: "flex", flexDirection: "column",
+          height: "100dvh", background: "#fff",
+          paddingTop: "env(safe-area-inset-top, 44px)"
+        }}
+      >
+        <div style={{
+          flex: 1, display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "flex-start",
+          paddingTop: 60, paddingBottom: 24, paddingLeft: 24, paddingRight: 24
+        }}>
+          <div style={{
+            width: 100, height: 100, borderRadius: 50,
+            background: `linear-gradient(145deg, ${TG}, #2479D8)`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            marginBottom: 20, boxShadow: `0 8px 32px rgba(51,144,236,0.35)`
+          }}>
+            <svg width="52" height="52" viewBox="0 0 24 24" fill="none">
+              <path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13"
+                stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: "#000", margin: "0 0 6px", textAlign: "center" }}>
+            Daikogram
+          </h1>
+          <p style={{ fontSize: 15, color: "#8E8E93", margin: "0 0 36px", textAlign: "center", lineHeight: 1.5 }}>
+            Please confirm your country code<br />and enter your phone number.
+          </p>
+          <div
+            onClick={() => showToast("🌐 Country selection coming soon")}
+            style={{
+              width: "100%", background: "#F2F2F7", borderRadius: 12,
+              padding: "14px 16px", marginBottom: 10,
+              display: "flex", alignItems: "center", gap: 12, cursor: "pointer"
+            }}
+          >
+            <span style={{ fontSize: 22 }}>🇯🇵</span>
+            <span style={{ fontSize: 16, color: "#000", flex: 1 }}>Japan</span>
+            <span style={{ fontSize: 16, color: "#8E8E93" }}>+81</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C7C7CC" strokeWidth="2.5">
+              <path d="M9 18l6-6-6-6"/>
+            </svg>
+          </div>
+          <div style={{
+            width: "100%", background: "#F2F2F7", borderRadius: 12,
+            padding: "14px 16px", marginBottom: 32,
+            display: "flex", alignItems: "center", gap: 8
+          }}>
+            <span style={{ fontSize: 16, color: TG, fontWeight: 600 }}>+81</span>
+            <div style={{ width: 1, height: 20, background: "#C7C7CC" }} />
+            <input
+              type="tel"
+              inputMode="numeric"
+              autoFocus
+              placeholder="Phone Number"
+              value={phone}
+              onChange={e => setPhone(e.target.value.replace(/\D/g, ""))}
+              style={{
+                border: "none", background: "transparent",
+                fontSize: 16, color: "#000", outline: "none",
+                flex: 1, letterSpacing: 0.5
+              }}
+            />
+          </div>
+          <div
+            onClick={handleNext}
+            style={{
+              width: "100%", padding: "15px", borderRadius: 12,
+              textAlign: "center", fontWeight: 700, fontSize: 16,
+              cursor: phone.length >= 7 ? "pointer" : "default",
+              background: phone.length >= 7 ? TG : "#C7C7CC",
+              color: "#fff", transition: "background 0.2s", userSelect: "none"
+            }}
+          >
+            Next
+          </div>
+        </div>
+        <div style={{ height: "env(safe-area-inset-bottom, 34px)" }} />
+      </div>
+    );
+
+    return (
+      <div
+        ref={el => { if (el) el.style.cssText += "; view-transition-name: screen;"; }}
+        style={{
+          display: "flex", flexDirection: "column",
+          height: "100dvh", background: "#fff",
+          paddingTop: "env(safe-area-inset-top, 44px)"
+        }}
+      >
+        <div style={{ padding: "8px 16px 0" }}>
+          <div
+            onClick={() => navigate(() => setAuthStep("phone"), "pop")}
+            style={{ fontSize: 28, color: TG, fontWeight: 300, cursor: "pointer", display: "inline-block" }}
+          >
+            ‹
+          </div>
+        </div>
+        <div style={{
+          flex: 1, display: "flex", flexDirection: "column",
+          alignItems: "center",
+          paddingTop: 40, paddingLeft: 24, paddingRight: 24
+        }}>
+          <div style={{
+            width: 80, height: 80, borderRadius: 40,
+            background: "#EBF3FE",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            marginBottom: 20
+          }}>
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+              <path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13"
+                stroke={TG} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: "#000", margin: "0 0 6px", textAlign: "center" }}>
+            +81 {authPhone}
+          </h1>
+          <p style={{ fontSize: 15, color: "#8E8E93", margin: "0 0 36px", textAlign: "center", lineHeight: 1.5 }}>
+            We have sent you a message with the code<br />to the number above.
+          </p>
+          <div style={{ display: "flex", gap: 10, marginBottom: 32, justifyContent: "center" }}>
+            {code.map((digit, i) => (
+              <div key={i} style={{
+                width: 52, height: 56, borderRadius: 12,
+                background: "#F2F2F7",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                position: "relative",
+                border: digit ? `2px solid ${TG}` : "2px solid transparent",
+                transition: "border-color 0.15s"
+              }}>
+                <input
+                  ref={codeRefs[i]}
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={digit}
+                  onChange={e => handleCodeChange(i, e.target.value)}
+                  onKeyDown={e => handleCodeKeyDown(i, e)}
+                  style={{
+                    position: "absolute", inset: 0,
+                    border: "none", background: "transparent",
+                    textAlign: "center", fontSize: 22,
+                    fontWeight: 600, color: "#000",
+                    outline: "none", width: "100%", height: "100%",
+                    borderRadius: 12, caretColor: TG
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+          {timer > 0 ? (
+            <p style={{ fontSize: 14, color: "#8E8E93", textAlign: "center" }}>
+              Resend code in{" "}
+              <span style={{ color: TG, fontWeight: 600 }}>0:{String(timer).padStart(2, "0")}</span>
+            </p>
+          ) : (
+            <div
+              onClick={resendCode}
+              style={{ fontSize: 15, color: TG, fontWeight: 500, cursor: "pointer", textAlign: "center" }}
+            >
+              Resend Code
+            </div>
+          )}
+        </div>
+        <div style={{ height: "env(safe-area-inset-bottom, 34px)" }} />
+      </div>
+    );
+  };
+
+  // ═══════════════════════════════════════
   // MAIN RENDER
   // ═══════════════════════════════════════
   const renderContent = () => {
@@ -1716,10 +1954,16 @@ export default function App() {
 
   return (
     <div style={{ width: "100dvw", height: "100dvh", background: T.bg, fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif', display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
-      <StatusBar />
-      <div ref={el => { if (el) el.style.cssText += "; view-transition-name: screen;"; }} style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>{renderContent()}</div>
-      <TabBar />
-      <Toast {...toast} />
+      {!authenticated ? (
+        <AuthScreen />
+      ) : (
+        <>
+          <StatusBar />
+          <div ref={el => { if (el) el.style.cssText += "; view-transition-name: screen;"; }} style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>{renderContent()}</div>
+          <TabBar />
+          <Toast {...toast} />
+        </>
+      )}
     </div>
   );
 }
