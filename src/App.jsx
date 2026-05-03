@@ -356,7 +356,7 @@ export default function App() {
           <div key={f} style={{ padding: "4px 14px", fontSize: 14, fontWeight: i===0?600:400, color: i===0?TG:T.text2, borderBottom: i===0?`2px solid ${TG}`:"none", whiteSpace: "nowrap", cursor: "pointer" }}>{f}</div>
         ))}
       </div>
-      <div style={{ flex: 1, overflowY: "auto" }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
         {chatList.map((c,i) => (
           <div key={i} onClick={() => goChat(c.name)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 16px", cursor: "pointer", background: T.card }}>
             <div style={{ width: 56, height: 56, borderRadius: 28, background: c.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: c.avatar.length > 1 ? 22 : 24, color: "#fff", fontWeight: 700, flexShrink: 0 }}>{c.avatar}</div>
@@ -1516,7 +1516,7 @@ export default function App() {
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={TG} strokeWidth="1.5"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
         <span style={{ fontSize: 17, color: TG }}>Invite Friends</span>
       </div>
-      <div style={{ flex: 1, overflowY: "auto" }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
         {[["Alex | Superteam","4 min ago","#E91E63"],["Noah ⭐","6 min ago","#4CAF50"],["Ryan | Windfall Capital","57 min ago","#FF9800"],["SEN UHI","1 hour ago","#00BCD4"],["Mike Eidlin 🧿","1 hour ago","#9C27B0"]].map(([n,t,c]) => (
           <div key={n} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", borderBottom: `0.5px solid ${T.border}`, background: T.card }}>
             <div style={{ width: 44, height: 44, borderRadius: 22, background: c, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 18 }}>{n[0]}</div>
@@ -1583,7 +1583,7 @@ export default function App() {
           <div style={{ width: 60 }} />
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto" }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
           {/* Start New Call — matches screenshot: phone icon left in TG blue, text right */}
           <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 16px 10px", background: T.bg, borderBottom: `0.5px solid ${T.border}`, cursor: "pointer" }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={TG} strokeWidth="1.8" strokeLinecap="round">
@@ -1958,7 +1958,7 @@ export default function App() {
       ) : (
         <>
           <StatusBar />
-          <div ref={el => { if (el) el.style.cssText += "; view-transition-name: screen;"; }} style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>{renderContent()}</div>
+          <div ref={el => { if (el) el.style.cssText += "; view-transition-name: screen;"; }} style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>{renderContent()}</div>
           <TabBar />
           <Toast {...toast} />
         </>
