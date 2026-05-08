@@ -174,7 +174,68 @@ export default function App() {
   const [perpLev, setPerpLev] = useState(5);
   const [perpSize, setPerpSize] = useState("1");
   const [toast, setToast] = useState({ message: "", visible: false });
-  const [followedCallers, setFollowedCallers] = useState({});
+  const [alertedCallers, setAlertedCallers] = useState({});
+  const [copyTradeCallers, setCopyTradeCallers] = useState({});
+  const [draftMessage, setDraftMessage] = useState("2R2F91ewRgZ6R33TcCDebK6Lh6pVTzAKgiURcpgVpump");
+  const [chatMessages, setChatMessages] = useState(() => [
+    { type: "date", label: "Today" },
+    { type: "msg", avatar: "S", avatarBg: "#E3A04F", name: "solhunter.sol", nameColor: "#C88A30", time: "13:02", text: "GM everyone 🫡 Market looks good today, let's go hard" },
+    { type: "msg", avatar: "R", avatarBg: "#00838F", name: "ren", nameColor: "#00695C", time: "13:05", text: "BTC dominance is dropping, alt season might be coming 👀" },
+    { type: "own", text: "SOL is doing well too", time: "13:06" },
+    { type: "call", msgId: "call1", callerName: "cryptokid.sol", callerColor: "#D84315", callerIdxVal: 0, badge: "TOP 10% CALLER", winRate: "74%", token: "$DEGEN", tokenSub: "DegenProtocol", tokenPrice: "$0.0042", tokenChange: "+184%", tokenBg: "linear-gradient(135deg,#00C853,#00ACC1)", tokenLetter: "D", mc: "$420K", vol: "$1.2M", ath: "$0.0089", liq: "$85K", tags: [["Bundle 2%","good"],["Insider 0.5%","good"],["Sniper 8%","warn"]], links: [["🔗 Twitter",true],["Telegram",false],["Website",false]], sparkData: [12,15,14,18,22,20,28,35,32,38,42,45,40,48,52,55,50,58,62], time: "14:30" },
+    { type: "msg", avatar: "P", avatarBg: "#0277BD", name: "pepelord", nameColor: "#0277BD", badge: "WHALE", time: "14:31", replyTo: { name: "cryptokid.sol", text: "$DEGEN call", color: "#D84315" }, text: "aping 2 SOL 🫡" },
+    { type: "own", text: "Chart looks good. Put in 0.5 SOL 🔥", time: "14:32" },
+    { type: "msg", avatar: "K", avatarBg: "#7B1FA2", name: "Kate🚀", nameColor: "#7B1FA2", time: "14:34", text: "Bought the dip, just watching~ Went in with DP" },
+    { type: "msg", avatar: "S", avatarBg: "#E3A04F", name: "solhunter.sol", nameColor: "#C88A30", time: "14:38", text: "$DEGEN is already over +250%, cryptokid is literally a god" },
+    { type: "own", text: "TP set at 50% 👍", time: "14:40" },
+    { type: "msg", avatar: "R", avatarBg: "#00838F", name: "ren", nameColor: "#00695C", time: "14:44", text: "If the next call comes in with this momentum it's gonna be insane" },
+    { type: "call", msgId: "call2", callerName: "alphahunter", callerColor: "#7C4DFF", callerIdxVal: 1, badge: "TOP 10% CALLER", winRate: "81%", token: "$SHILL", tokenSub: "ShillDAO", tokenPrice: "$0.00018", tokenChange: "+320%", tokenBg: "linear-gradient(135deg,#7C4DFF,#E040FB)", tokenLetter: "S", mc: "$180K", vol: "$890K", ath: "$0.00042", liq: "$62K", tags: [["Bundle 1%","good"],["Dev doxxed","good"],["Sniper 12%","warn"]], links: [["🔗 Twitter",true],["Telegram",true],["Website",false]], sparkData: [5,8,7,14,20,18,30,42,38,55,62,70,65,82,95,110,105,128,142], time: "16:12" },
+    { type: "msg", avatar: "P", avatarBg: "#0277BD", name: "pepelord", nameColor: "#0277BD", badge: "WHALE", time: "16:13", text: "alphahunter calling again 🔥🔥🔥 going in 5 SOL" },
+    { type: "msg", avatar: "K", avatarBg: "#7B1FA2", name: "Kate🚀", nameColor: "#7B1FA2", time: "16:14", text: "Was watching $SHILL too! MC is so small it's scary… but going in 1 SOL" },
+    { type: "own", text: "alphahunter WR 81%… should I ape", time: "16:15" },
+    { type: "msg", avatar: "S", avatarBg: "#E3A04F", name: "solhunter.sol", nameColor: "#C88A30", time: "16:20", text: "Took out half when $SHILL 2x'd 💰 letting the rest ride" },
+    { type: "own", text: "Smart! I took back 0.3 SOL too", time: "16:22" },
+    { type: "msg", avatar: "R", avatarBg: "#00838F", name: "ren", nameColor: "#00695C", time: "16:28", text: "Volume is picking up, could hit +500% Can't look away" },
+    { type: "msg", avatar: "K", avatarBg: "#7B1FA2", name: "Kate🚀", nameColor: "#7B1FA2", time: "16:35", text: "This is starting to feel like the $CAVE gram portfolio lol 😂" },
+    { type: "own", text: "For real 😂 can't wait for the next call", time: "16:36" },
+    { type: "call", msgId: "call3", callerName: "whalemaster", callerColor: "#00838F", callerIdxVal: 2, badge: "TOP 10% CALLER", winRate: "68%", token: "$PUMP", tokenSub: "PumpFun V2", tokenPrice: "$0.0012", tokenChange: "+42%", tokenBg: "linear-gradient(135deg,#FF6D00,#FFC400)", tokenLetter: "P", mc: "$1.2M", vol: "$4.5M", ath: "$0.0028", liq: "$210K", tags: [["Bundle 3%","good"],["Insider 1.2%","good"],["Sniper 5%","good"]], links: [["🔗 Twitter",true],["Telegram",true],["Website",true]], sparkData: [30,32,29,35,38,42,40,45,50,48,55,62,60,68,72,70,78,82,88], time: "19:45" },
+    { type: "msg", avatar: "P", avatarBg: "#0277BD", name: "pepelord", nameColor: "#0277BD", badge: "WHALE", time: "19:46", text: "$PUMP looks solid, MC is bigger so easier to enter with lower risk" },
+    { type: "msg", avatar: "S", avatarBg: "#E3A04F", name: "solhunter.sol", nameColor: "#C88A30", time: "19:47", text: "whalemaster always plays the larger MC ones steadily, love it" },
+    { type: "own", text: "Went in 2 SOL! Liquidity over $200K so feeling safe", time: "19:48" },
+    { type: "msg", avatar: "K", avatarBg: "#7B1FA2", name: "Kate🚀", nameColor: "#7B1FA2", time: "19:52", text: "If all 3 calls today finish green it's legendary 🙏" },
+    { type: "msg", avatar: "R", avatarBg: "#00838F", name: "ren", nameColor: "#00695C", time: "20:01", text: "$PUMP just hit +80%! whalemaster never misses 🐋" },
+    { type: "own", text: "CAVE callers are the best fr 🔥", time: "20:03" },
+    { type: "msg", avatar: "S", avatarBg: "#E3A04F", name: "solhunter.sol", nameColor: "#C88A30", time: "20:10", text: "Did anyone's total CAVE pf gains cross +$4200 today? lol" },
+    { type: "msg", avatar: "P", avatarBg: "#0277BD", name: "pepelord", nameColor: "#0277BD", badge: "WHALE", time: "20:12", text: "+$9K secured 🤝" },
+    { type: "own", text: "lol typical whale 😂", time: "20:13" },
+  ]);
+  const handleSend = useCallback(() => {
+    const text = draftMessage.trim();
+    if (!text) return;
+    const id = "user-" + Date.now();
+    const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    setChatMessages(prev => [...prev, { type: "ownPending", id, text, time }]);
+    setDraftMessage("");
+    if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(text)) {
+      setTimeout(() => {
+        setChatMessages(prev => prev.map(m =>
+          m.id === id
+            ? {
+                type: "ownCall", id, time,
+                token: "$BUDDY", tokenSub: "Best Buddy", tokenPrice: "$0.0031",
+                tokenChange: "+47%", tokenBg: "linear-gradient(135deg,#FF6D00,#FFC400)",
+                tokenLetter: "B",
+                mc: "$310K", vol: "$980K", ath: "$0.0058", liq: "$72K",
+                tags: [["Bundle 1.5%","good"],["Insider 0.4%","good"],["Sniper 6%","warn"]],
+                links: [["🔗 Twitter",true],["Telegram",true],["Website",false]],
+                sparkData: [10,12,11,15,18,17,22,28,27,32,38,40,38,44,50,55,52,60,65],
+                ca: text,
+              }
+            : m
+        ));
+      }, 600);
+    }
+  }, [draftMessage]);
   const [groupTab, setGroupTab] = useState("Top Callers");
   const [chartTf, setChartTf] = useState("4H");
   const [perpPair, setPerpPair] = useState("SOL-PERP");
@@ -231,9 +292,13 @@ export default function App() {
     if (profileOpen) { navigate(() => setProfileOpen(null), "pop"); return; }
     navigate(() => setChatOpen(null), "pop");
   };
-  const toggleFollow = (idx) => {
-    setFollowedCallers(f => ({ ...f, [idx]: !f[idx] }));
-    showToast(followedCallers[idx] ? "Unfollowed" : "✅ Following");
+  const toggleAlerts = (idx) => {
+    setAlertedCallers(f => ({ ...f, [idx]: !f[idx] }));
+    showToast(alertedCallers[idx] ? "Alerts off" : "🔔 Alerts on");
+  };
+  const toggleCopyTrade = (idx) => {
+    setCopyTradeCallers(f => ({ ...f, [idx]: !f[idx] }));
+    showToast(copyTradeCallers[idx] ? "Copy Trade stopped" : "✅ Copy Trade started");
   };
 
   // ─── Theme helpers ───
@@ -294,7 +359,7 @@ export default function App() {
     const inactiveColor = isDark ? "rgba(235,235,245,0.50)" : "rgba(60,60,67,0.50)";
 
     return (
-      <div style={{ ...glassStyle, display: "flex", paddingTop: 8, paddingBottom: "max(16px, env(safe-area-inset-bottom, 16px))", position: "relative", zIndex: 10, flexShrink: 0 }}>
+      <div style={{ ...glassStyle, display: "flex", paddingTop: 8, paddingBottom: "max(12px, env(safe-area-inset-bottom, 12px))", position: "relative", zIndex: 10, flexShrink: 0 }}>
         {tabs.map(t => {
           const active = (t.id === "home" ? tab === "home" : tab === t.id) && !chatOpen && !portfolioOpen && !perpOpen && !agentOpen && !notifOpen && !discoveryOpen && !leaderboardOpen;
           const iconFill   = active ? TG : "none";
@@ -326,9 +391,20 @@ export default function App() {
     { name: "Solana Builders", avatar: "◎", bg: "linear-gradient(135deg,#9945FF,#14F195)", msg: "new SDK update just dropped", time: "21:58", unread: 24 },
     { name: "cryptokid.sol", avatar: "🔥", bg: "#D84315", msg: "$DEGEN looking good, aping in", time: "21:45", unread: 3 },
     { name: "Solana Founders Hub", avatar: "🛠️", bg: "linear-gradient(135deg,#FF6B35,#FFD600)", msg: "Alex: hackathon results!", time: "21:30" },
-
+    { name: "alphahunter", avatar: "🎯", bg: "#7C4DFF", msg: "$SHILL exit at +320% 🚀", time: "20:55", unread: 2 },
+    { name: "whalemaster", avatar: "🐳", bg: "#00838F", msg: "$PUMP looking strong, holding", time: "20:13" },
     { name: "DeFi Alpha", avatar: "💎", bg: "linear-gradient(135deg,#00BCD4,#7C4DFF)", msg: "Rose: yield farm update…", time: "19:42", unread: 156, muted: true },
-    { name: "Saved Messages", avatar: "🔖", bg: TG, msg: "debot-query", time: "Wed", pinned: true },
+    { name: "Memecoin Mafia", avatar: "🐸", bg: "linear-gradient(135deg,#43A047,#FDD835)", msg: "frog: WIF holders up 🐶", time: "19:10", unread: 47 },
+    { name: "Pump.fun Snipers", avatar: "🎯", bg: "linear-gradient(135deg,#FF1744,#FF9100)", msg: "new token launching in 2min", time: "18:48", unread: 8 },
+    { name: "Solana Mobile", avatar: "📱", bg: "linear-gradient(135deg,#9945FF,#03DAC6)", msg: "Saga 2 firmware update", time: "17:22", muted: true },
+    { name: "pepelord", avatar: "🐸", bg: "#0277BD", msg: "secured +$9K today 🤝", time: "17:05", unread: 1 },
+    { name: "ren", avatar: "🌊", bg: "#00838F", msg: "alt season incoming", time: "16:30" },
+    { name: "Kate🚀", avatar: "K", bg: "#7B1FA2", msg: "thanks for the call earlier!", time: "15:58", unread: 4 },
+    { name: "solhunter.sol", avatar: "S", bg: "#E3A04F", msg: "TP set at 50% 👍", time: "14:40" },
+    { name: "Jito MEV Bot", avatar: "⚡", bg: "linear-gradient(135deg,#FFD600,#FF6D00)", msg: "Daily rewards: 0.42 SOL", time: "12:00", muted: true },
+    { name: "Trade Wizard", avatar: "🧙", bg: "linear-gradient(135deg,#3F51B5,#9C27B0)", msg: "Strategy backtest complete", time: "Wed", unread: 1 },
+    { name: "NFT Whales", avatar: "🖼️", bg: "linear-gradient(135deg,#E91E63,#FF9800)", msg: "Mad Lads floor 220 SOL", time: "Wed", muted: true },
+    { name: "Saved Messages", avatar: "🔖", bg: TG, msg: "debot-query", time: "Tue", pinned: true },
   ];
   const ChatsListScreen = () => (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: isDark ? "#000" : "#fff" }}>
@@ -357,7 +433,7 @@ export default function App() {
           <div key={f} style={{ padding: "4px 14px", fontSize: 14, fontWeight: i===0?600:400, color: i===0?TG:T.text2, borderBottom: i===0?`2px solid ${TG}`:"none", whiteSpace: "nowrap", cursor: "pointer" }}>{f}</div>
         ))}
       </div>
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", overscrollBehaviorY: "contain" }}>
         {chatList.map((c,i) => (
           <div key={i} onClick={() => goChat(c.name)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 16px", cursor: "pointer", background: T.card }}>
             <div style={{ width: 56, height: 56, borderRadius: 28, background: c.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: c.avatar.length > 1 ? 22 : 24, color: "#fff", fontWeight: 700, flexShrink: 0 }}>{c.avatar}</div>
@@ -501,6 +577,66 @@ export default function App() {
       </div>
     );
 
+    const OwnCallCard = ({ token, tokenSub, tokenPrice, tokenChange, tokenBg, tokenLetter,
+      mc, vol, ath, liq, tags, links, sparkData, time, ca }) => (
+      <div style={{ alignSelf: "flex-end", maxWidth: "93%", display: "flex" }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ background: "#DCFFD4", borderRadius: "16px 2px 16px 16px", overflow: "hidden", boxShadow: "0 1px 2px rgba(0,0,0,0.08)" }}>
+            <div style={{ padding: "6px 10px 4px", display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 13.5, fontWeight: 700, color: "#1B5E20" }}>You</span>
+              <span style={{ background: "rgba(46,125,50,0.15)", color: "#1B5E20", fontSize: 10, padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>SHARED</span>
+            </div>
+            {ca && <div style={{ padding: "0 10px 4px", fontSize: 11, color: "#33691E", fontFamily: "ui-monospace, Menlo, monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ca}</div>}
+            <div style={{ margin: "0 8px 0", borderRadius: 12, border: "1px solid rgba(46,125,50,0.2)", overflow: "hidden", background: "#F1FCEE" }}>
+              <div style={{ padding: "10px 12px 6px", display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ position: "relative", flexShrink: 0 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 19, background: tokenBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, color: "#fff" }}>{tokenLetter}</div>
+                  <div style={{ position: "absolute", bottom: -2, right: -2, width: 15, height: 15, borderRadius: 8, overflow: "hidden", border: "2px solid #F1FCEE" }}>
+                    <img src="https://assets.coingecko.com/coins/images/28207/large/mSOL.png" style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="SOL" />
+                  </div>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: "#000" }}>{token}</div>
+                  <div style={{ fontSize: 12, color: "#558B2F" }}>{tokenSub}</div>
+                </div>
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 16, color: "#000" }}>{tokenPrice}</div>
+                  <div style={{ fontSize: 12, color: GREEN, fontWeight: 600 }}>{tokenChange}</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", padding: "0 12px 6px", gap: 12, fontSize: 12 }}>
+                {[["MC", mc], ["Vol", vol], ["ATH", ath], ["Liq", liq]].map(function(item) {
+                  return <div key={item[0]}><span style={{ color: "#558B2F" }}>{item[0]} </span><span style={{ color: "#33691E", fontWeight: 500 }}>{item[1]}</span></div>;
+                })}
+              </div>
+              <div style={{ padding: "0 12px 4px" }}><Sparkline data={sparkData} color={GREEN} /></div>
+              <div style={{ display: "flex", gap: 4, padding: "2px 12px 8px", flexWrap: "wrap" }}>
+                {tags.map(function(tag) {
+                  var tagColor = tag[1] === "good" ? { bg: "#E8F5E9", text: "#2E7D32" } : tag[1] === "warn" ? { bg: "#FFF8E1", text: "#E65100" } : { bg: "#FCE4EC", text: "#880E4F" };
+                  return <span key={tag[0]} style={{ background: tagColor.bg, color: tagColor.text, fontSize: 11, padding: "2px 7px", borderRadius: 5, fontWeight: 500 }}>{tag[0]}</span>;
+                })}
+              </div>
+              <div style={{ padding: "6px 12px 8px", borderTop: "1px solid rgba(46,125,50,0.2)", display: "flex", alignItems: "center", gap: 6, fontSize: 12, flexWrap: "wrap" }}>
+                {links.map(function(link) {
+                  return <span key={link[0]} style={{ color: TG, fontWeight: 500, cursor: "pointer" }}>{link[0]}{link[1] ? "✅" : "❌"}</span>;
+                })}
+                <span style={{ color: "#BBB", margin: "0 2px" }}>·</span>
+                <span style={{ color: TG, fontWeight: 500, cursor: "pointer" }}>Chart</span>
+              </div>
+            </div>
+            <div onClick={() => navigate(() => setTradeToken(token.replace("$", "")))}
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, margin: "8px", padding: "10px", borderRadius: 10, background: TG, cursor: "pointer", fontWeight: 600, fontSize: 14, color: "#fff" }}>
+              ⚡ Trade {token}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 3, padding: "0 10px 5px" }}>
+              <span style={{ fontSize: 11, color: "#5aab4f" }}>{time}</span>
+              <svg width="15" height="10" viewBox="0 0 20 10"><path d="M1 5l4 4L14 1M8 5l4 4L21 1" stroke="#4CAF50" strokeWidth="1.8" fill="none" strokeLinecap="round"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+
     return (
       <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
         <div style={{ display: "flex", alignItems: "center", padding: "6px 12px 6px 4px", background: TG, color: "#fff", gap: 6 }}>
@@ -515,86 +651,65 @@ export default function App() {
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="1.8" style={{ marginLeft: 6 }}><circle cx="12" cy="5" r="1.5" fill="rgba(255,255,255,0.85)"/><circle cx="12" cy="12" r="1.5" fill="rgba(255,255,255,0.85)"/><circle cx="12" cy="19" r="1.5" fill="rgba(255,255,255,0.85)"/></svg>
         </div>
 
-        <div ref={scrollAreaRef} style={{ flex: 1, overflowY: "auto", padding: "6px 8px 8px", display: "flex", flexDirection: "column", gap: 4,
+        <div ref={scrollAreaRef} style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", overscrollBehaviorY: "contain", padding: "6px 8px 8px", display: "flex", flexDirection: "column", gap: 4,
           background: isDark ? "#0F1C12" : "#C8DFCC",
           backgroundImage: isDark ? "none" : "url(\"data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23a8c4ae' fill-opacity='0.20'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/svg%3E\")" }}>
 
 
 
-          <DateSep label="Today" />
-          <Msg avatar="S" avatarBg="#E3A04F" name="solhunter.sol" nameColor="#C88A30" time="13:02" text="GM everyone 🫡 Market looks good today, let's go hard" />
-          <Msg avatar="R" avatarBg="#00838F" name="ren" nameColor="#00695C" time="13:05" text="BTC dominance is dropping, alt season might be coming 👀" />
-          <OwnMsg text="SOL is doing well too" time="13:06" />
-
-          <CallCard msgId="call1" callerName="cryptokid.sol" callerColor="#D84315" callerIdxVal={0}
-            badge="TOP 10% CALLER" winRate="74%"
-            token="$DEGEN" tokenSub="DegenProtocol" tokenPrice="$0.0042" tokenChange="+184%"
-            tokenBg="linear-gradient(135deg,#00C853,#00ACC1)" tokenLetter="D"
-            mc="$420K" vol="$1.2M" ath="$0.0089" liq="$85K"
-            tags={[["Bundle 2%","good"],["Insider 0.5%","good"],["Sniper 8%","warn"]]}
-            links={[["🔗 Twitter",true],["Telegram",false],["Website",false]]}
-            sparkData={[12,15,14,18,22,20,28,35,32,38,42,45,40,48,52,55,50,58,62]}
-            time="14:30" />
-
-          <Msg avatar="P" avatarBg="#0277BD" name="pepelord" nameColor="#0277BD" badge="WHALE" time="14:31"
-            replyTo={{ name: "cryptokid.sol", text: "$DEGEN call", color: "#D84315" }} text="aping 2 SOL 🫡" />
-          <OwnMsg text="Chart looks good. Put in 0.5 SOL 🔥" time="14:32" />
-          <Msg avatar="K" avatarBg="#7B1FA2" name="Kate🚀" nameColor="#7B1FA2" time="14:34" text="Bought the dip, just watching~ Went in with DP" />
-          <Msg avatar="S" avatarBg="#E3A04F" name="solhunter.sol" nameColor="#C88A30" time="14:38" text="$DEGEN is already over +250%, cryptokid is literally a god" />
-          <OwnMsg text="TP set at 50% 👍" time="14:40" />
-          <Msg avatar="R" avatarBg="#00838F" name="ren" nameColor="#00695C" time="14:44" text="If the next call comes in with this momentum it's gonna be insane" />
-
-          <CallCard msgId="call2" callerName="alphahunter" callerColor="#7C4DFF" callerIdxVal={1}
-            badge="TOP 10% CALLER" winRate="81%"
-            token="$SHILL" tokenSub="ShillDAO" tokenPrice="$0.00018" tokenChange="+320%"
-            tokenBg="linear-gradient(135deg,#7C4DFF,#E040FB)" tokenLetter="S"
-            mc="$180K" vol="$890K" ath="$0.00042" liq="$62K"
-            tags={[["Bundle 1%","good"],["Dev doxxed","good"],["Sniper 12%","warn"]]}
-            links={[["🔗 Twitter",true],["Telegram",true],["Website",false]]}
-            sparkData={[5,8,7,14,20,18,30,42,38,55,62,70,65,82,95,110,105,128,142]}
-            time="16:12" />
-
-          <Msg avatar="P" avatarBg="#0277BD" name="pepelord" nameColor="#0277BD" badge="WHALE" time="16:13" text="alphahunter calling again 🔥🔥🔥 going in 5 SOL" />
-          <Msg avatar="K" avatarBg="#7B1FA2" name="Kate🚀" nameColor="#7B1FA2" time="16:14" text="Was watching $SHILL too! MC is so small it's scary… but going in 1 SOL" />
-          <OwnMsg text="alphahunter WR 81%… should I ape" time="16:15" />
-          <Msg avatar="S" avatarBg="#E3A04F" name="solhunter.sol" nameColor="#C88A30" time="16:20" text="Took out half when $SHILL 2x'd 💰 letting the rest ride" />
-          <OwnMsg text="Smart! I took back 0.3 SOL too" time="16:22" />
-          <Msg avatar="R" avatarBg="#00838F" name="ren" nameColor="#00695C" time="16:28" text="Volume is picking up, could hit +500% Can't look away" />
-          <Msg avatar="K" avatarBg="#7B1FA2" name="Kate🚀" nameColor="#7B1FA2" time="16:35" text="This is starting to feel like the $CAVE gram portfolio lol 😂" />
-          <OwnMsg text="For real 😂 can't wait for the next call" time="16:36" />
-
-          <CallCard msgId="call3" callerName="whalemaster" callerColor="#00838F" callerIdxVal={2}
-            badge="TOP 10% CALLER" winRate="68%"
-            token="$PUMP" tokenSub="PumpFun V2" tokenPrice="$0.0012" tokenChange="+42%"
-            tokenBg="linear-gradient(135deg,#FF6D00,#FFC400)" tokenLetter="P"
-            mc="$1.2M" vol="$4.5M" ath="$0.0028" liq="$210K"
-            tags={[["Bundle 3%","good"],["Insider 1.2%","good"],["Sniper 5%","good"]]}
-            links={[["🔗 Twitter",true],["Telegram",true],["Website",true]]}
-            sparkData={[30,32,29,35,38,42,40,45,50,48,55,62,60,68,72,70,78,82,88]}
-            time="19:45" />
-
-          <Msg avatar="P" avatarBg="#0277BD" name="pepelord" nameColor="#0277BD" badge="WHALE" time="19:46" text="$PUMP looks solid, MC is bigger so easier to enter with lower risk" />
-          <Msg avatar="S" avatarBg="#E3A04F" name="solhunter.sol" nameColor="#C88A30" time="19:47" text="whalemaster always plays the larger MC ones steadily, love it" />
-          <OwnMsg text="Went in 2 SOL! Liquidity over $200K so feeling safe" time="19:48" />
-          <Msg avatar="K" avatarBg="#7B1FA2" name="Kate🚀" nameColor="#7B1FA2" time="19:52" text="If all 3 calls today finish green it's legendary 🙏" />
-          <Msg avatar="R" avatarBg="#00838F" name="ren" nameColor="#00695C" time="20:01" text="$PUMP just hit +80%! whalemaster never misses 🐋" />
-          <OwnMsg text="CAVE callers are the best fr 🔥" time="20:03" />
-          <Msg avatar="S" avatarBg="#E3A04F" name="solhunter.sol" nameColor="#C88A30" time="20:10" text="Did anyone's total CAVE pf gains cross +$4200 today? lol" />
-          <Msg avatar="P" avatarBg="#0277BD" name="pepelord" nameColor="#0277BD" badge="WHALE" time="20:12" text="+$9K secured 🤝" />
-          <OwnMsg text="lol typical whale 😂" time="20:13" />
+          {chatMessages.map((m, idx) => {
+            const k = m.id || idx;
+            if (m.type === "date") return <DateSep key={k} label={m.label} />;
+            if (m.type === "sys") return <SysMsg key={k} text={m.text} />;
+            if (m.type === "msg") return <Msg key={k} avatar={m.avatar} avatarBg={m.avatarBg} name={m.name} nameColor={m.nameColor} badge={m.badge} text={m.text} time={m.time} replyTo={m.replyTo} />;
+            if (m.type === "own") return <OwnMsg key={k} text={m.text} time={m.time} read={m.read} />;
+            if (m.type === "ownPending") return <OwnMsg key={k} text={m.text} time={m.time} read={false} />;
+            if (m.type === "call") return <CallCard key={k} msgId={m.msgId} callerName={m.callerName} callerColor={m.callerColor} callerIdxVal={m.callerIdxVal} badge={m.badge} winRate={m.winRate} token={m.token} tokenSub={m.tokenSub} tokenPrice={m.tokenPrice} tokenChange={m.tokenChange} tokenBg={m.tokenBg} tokenLetter={m.tokenLetter} mc={m.mc} vol={m.vol} ath={m.ath} liq={m.liq} tags={m.tags} links={m.links} sparkData={m.sparkData} time={m.time} />;
+            if (m.type === "ownCall") return <OwnCallCard key={k} {...m} />;
+            return null;
+          })}
         </div>
 
         <div style={{ padding: "6px 8px", borderTop: "0.5px solid " + (isDark ? "rgba(255,255,255,0.1)" : "#C6C6C8"), background: isDark ? "#1C1C1E" : "#fff", display: "flex", gap: 6, alignItems: "center" }}>
           <div style={{ width: 34, height: 34, borderRadius: 17, background: isDark ? "#2C2C2E" : "#F2F2F7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer" }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="1.8"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
           </div>
-          <div style={{ flex: 1, background: isDark ? "#2C2C2E" : "#F2F2F7", borderRadius: 20, padding: "8px 14px", fontSize: 16, color: isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)" }}>Message</div>
-          <div style={{ width: 34, height: 34, borderRadius: 17, background: isDark ? "#2C2C2E" : "#F2F2F7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer" }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="1.8"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
-          </div>
-          <div style={{ width: 34, height: 34, borderRadius: 17, background: TG, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer" }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-          </div>
+          <input
+            type="text"
+            value={draftMessage}
+            onChange={(e) => setDraftMessage(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSend(); } }}
+            placeholder="Message"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              background: isDark ? "#2C2C2E" : "#F2F2F7",
+              border: "none",
+              outline: "none",
+              borderRadius: 20,
+              padding: "8px 14px",
+              fontSize: 16,
+              color: isDark ? "#fff" : "#000",
+              fontFamily: "inherit",
+            }}
+          />
+          {draftMessage.trim() ? (
+            <div onClick={handleSend} style={{ width: 34, height: 34, borderRadius: 17, background: TG, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+            </div>
+          ) : (
+            <>
+              <div style={{ width: 34, height: 34, borderRadius: 17, background: isDark ? "#2C2C2E" : "#F2F2F7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer" }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="1.8"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+              </div>
+              <div style={{ width: 34, height: 34, borderRadius: 17, background: TG, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer" }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+              </div>
+            </>
+          )}
         </div>
       </div>
     );
@@ -772,7 +887,8 @@ export default function App() {
   // ═══════════════════════════════════════
   const CallerProfile = () => {
     const cl = CALLERS[callerIdx] || CALLERS[0];
-    const isFollowed = followedCallers[callerIdx];
+    const isAlertsOn = alertedCallers[callerIdx];
+    const isCopyTradeOn = copyTradeCallers[callerIdx];
     return (
       <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: BG }}>
         <div style={{ background: "#fff", textAlign: "center", paddingBottom: 16 }}>
@@ -789,10 +905,13 @@ export default function App() {
             ))}
           </div>
         </div>
-        <div style={{ flex: 1, overflowY: "auto" }}>
-          <div style={{ padding: "10px 16px" }}>
-            <div onClick={() => toggleFollow(callerIdx)} style={{ padding: "12px", borderRadius: 12, textAlign: "center", fontWeight: 600, fontSize: 16, cursor: "pointer", background: isFollowed ? "#fff" : TG, color: isFollowed ? TG : "#fff", border: isFollowed ? `1.5px solid ${TG}` : "1.5px solid transparent" }}>
-              {isFollowed ? "✓ Following" : "＋ Follow Caller"}
+        <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", overscrollBehaviorY: "contain" }}>
+          <div style={{ padding: "10px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+            <div onClick={() => toggleAlerts(callerIdx)} style={{ padding: "12px", borderRadius: 12, textAlign: "center", fontWeight: 600, fontSize: 16, cursor: "pointer", background: isAlertsOn ? "#fff" : TG, color: isAlertsOn ? TG : "#fff", border: isAlertsOn ? `1.5px solid ${TG}` : "1.5px solid transparent" }}>
+              {isAlertsOn ? "🔔 Alerts On" : "🔔 Get Alerts"}
+            </div>
+            <div onClick={() => toggleCopyTrade(callerIdx)} style={{ padding: "12px", borderRadius: 12, textAlign: "center", fontWeight: 600, fontSize: 16, cursor: "pointer", background: isCopyTradeOn ? "#fff" : "#0A84FF", color: isCopyTradeOn ? "#0A84FF" : "#fff", border: isCopyTradeOn ? `1.5px solid #0A84FF` : "1.5px solid transparent" }}>
+              {isCopyTradeOn ? "✓ Copy Trading" : "⚡ Copy Trade"}
             </div>
           </div>
           <div style={{ padding: "0 16px 0", fontSize: 13, color: "#8E8E93", fontWeight: 500 }}>CALLER STATS</div>
@@ -1399,8 +1518,8 @@ export default function App() {
                     <div style={{ fontWeight: 600, fontSize: 15, color: "#000" }}>{c.name}</div>
                     <div style={{ fontSize: 12, color: "#8E8E93" }}>WR {c.wr} · {c.calls} calls · {c.followers} followers</div>
                   </div>
-                  <div onClick={(e) => { e.stopPropagation(); toggleFollow(i); }} style={{ padding: "6px 12px", borderRadius: 8, background: followedCallers[i]?"#F2F2F7":TG, color: followedCallers[i]?TG:"#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", border: followedCallers[i]?`1px solid ${TG}`:"none" }}>
-                    {followedCallers[i]?"✓ Following":"+Follow"}
+                  <div onClick={(e) => { e.stopPropagation(); toggleAlerts(i); }} style={{ padding: "6px 12px", borderRadius: 8, background: alertedCallers[i]?"#F2F2F7":TG, color: alertedCallers[i]?TG:"#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", border: alertedCallers[i]?`1px solid ${TG}`:"none" }}>
+                    {alertedCallers[i]?"✓ Alerts":"+Alerts"}
                   </div>
                 </div>
               ))}
@@ -1517,8 +1636,29 @@ export default function App() {
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={TG} strokeWidth="1.5"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
         <span style={{ fontSize: 17, color: TG }}>Invite Friends</span>
       </div>
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-        {[["Alex | Superteam","4 min ago","#E91E63"],["Noah ⭐","6 min ago","#4CAF50"],["Ryan | Windfall Capital","57 min ago","#FF9800"],["SEN UHI","1 hour ago","#00BCD4"],["Mike Eidlin 🧿","1 hour ago","#9C27B0"]].map(([n,t,c]) => (
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", overscrollBehaviorY: "contain" }}>
+        {[
+          ["Alex | Superteam","4 min ago","#E91E63"],
+          ["Noah ⭐","6 min ago","#4CAF50"],
+          ["Ryan | Windfall Capital","57 min ago","#FF9800"],
+          ["SEN UHI","1 hour ago","#00BCD4"],
+          ["Mike Eidlin 🧿","1 hour ago","#9C27B0"],
+          ["cryptokid.sol","2 hours ago","#D84315"],
+          ["alphahunter","3 hours ago","#7C4DFF"],
+          ["whalemaster","4 hours ago","#00838F"],
+          ["Kate🚀","5 hours ago","#7B1FA2"],
+          ["pepelord","6 hours ago","#0277BD"],
+          ["solhunter.sol","8 hours ago","#E3A04F"],
+          ["ren","yesterday","#00695C"],
+          ["Connor","yesterday","#7C4DFF"],
+          ["Duke","2 days ago","#FF6D00"],
+          ["JK","3 days ago","#00838F"],
+          ["Max | PixeLAW","4 days ago","#FF2D55"],
+          ["David | Phantom","1 week ago","#5C6BC0"],
+          ["Anatoly Y.","1 week ago","#9945FF"],
+          ["Toly","2 weeks ago","#14F195"],
+          ["Mert | Helius","2 weeks ago","#FFC107"],
+        ].map(([n,t,c]) => (
           <div key={n} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", borderBottom: `0.5px solid ${T.border}`, background: T.card }}>
             <div style={{ width: 44, height: 44, borderRadius: 22, background: c, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 18 }}>{n[0]}</div>
             <div><div style={{ fontSize: 16.5, fontWeight: 500, color: T.text }}>{n}</div><div style={{ fontSize: 14, color: "#8E8E93" }}>last seen {t}</div></div>
