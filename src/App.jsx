@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
+import { flushSync } from "react-dom";
 
 // ─── View Transition CSS ───────────────────────────────────────
 const VT_STYLES = `
@@ -501,7 +502,7 @@ export default function App() {
     );
 
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
         <div style={{ display: "flex", alignItems: "center", padding: "6px 12px 6px 4px", background: TG, color: "#fff", gap: 6 }}>
           <div onClick={goBack} style={{ cursor: "pointer", padding: "4px 6px", fontSize: 26, fontWeight: 300, lineHeight: 1 }}>‹</div>
           <div onClick={() => navigate(() => setProfileOpen("group"))}
@@ -605,7 +606,7 @@ export default function App() {
   const GroupProfile = () => {
     const gTabs = ["Top Callers","Members","Media","Saved","Files","Links"];
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%", background: BG }}>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: BG }}>
         <div style={{ background: "#fff", textAlign: "center", paddingBottom: 16 }}>
           <div style={{ display: "flex", padding: "8px 16px" }}><div onClick={goBack} style={{ cursor: "pointer", fontSize: 28, color: TG, fontWeight: 300 }}>‹</div></div>
           <div style={{ width: 80, height: 80, borderRadius: 40, background: "linear-gradient(135deg,#7B68EE,#00C853)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, margin: "0 auto 8px" }}>🐋</div>
@@ -717,7 +718,7 @@ export default function App() {
   // TRADE SCREEN
   // ═══════════════════════════════════════
   const TradeScreen = () => (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: BG }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: BG }}>
       <div style={{ display: "flex", alignItems: "center", padding: "6px 10px", background: TG, color: "#fff", gap: 8 }}>
         <div onClick={goBack} style={{ cursor: "pointer", fontSize: 22, fontWeight: 300, padding: "0 4px" }}>‹</div>
         <div style={{ flex: 1, fontWeight: 600, fontSize: 16 }}>⚡ Trade $DEGEN</div>
@@ -773,7 +774,7 @@ export default function App() {
     const cl = CALLERS[callerIdx] || CALLERS[0];
     const isFollowed = followedCallers[callerIdx];
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%", background: BG }}>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: BG }}>
         <div style={{ background: "#fff", textAlign: "center", paddingBottom: 16 }}>
           <div style={{ display: "flex", padding: "8px 16px" }}><div onClick={goBack} style={{ cursor: "pointer", fontSize: 28, color: TG, fontWeight: 300 }}>‹</div></div>
           <div style={{ width: 80, height: 80, borderRadius: 40, background: cl.c, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, margin: "0 auto 8px", color: "#fff", fontWeight: 700 }}>{cl.name[0].toUpperCase()}</div>
@@ -834,7 +835,7 @@ export default function App() {
   // PORTFOLIO SCREEN
   // ═══════════════════════════════════════
   const PortfolioScreen = () => (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: BG }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: BG }}>
       <div style={{ display: "flex", alignItems: "center", padding: "6px 10px", background: TG, color: "#fff", gap: 8 }}>
         <div onClick={goBack} style={{ cursor: "pointer", fontSize: 22, fontWeight: 300, padding: "0 4px" }}>‹</div>
         <div style={{ flex: 1, textAlign: "center" }}><span style={{ fontSize: 16, fontWeight: 600 }}>◎ Solana ▾</span></div>
@@ -902,7 +903,7 @@ export default function App() {
   // DAIKOGRAM TAB
   // ═══════════════════════════════════════
   const DaikogramScreen = () => (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: T.bg3 }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: T.bg3 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 16px 6px", background: T.headerBg }}>
         <span style={{ fontSize: 17, fontWeight: 600, color: T.text }}>🏠 Home</span>
         <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
@@ -993,7 +994,7 @@ export default function App() {
       return sum + v;
     }, 0);
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#0d0d0d" }}>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: "#0d0d0d" }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", padding: "6px 10px 6px", background: "#111", gap: 8, borderBottom: "0.5px solid #222" }}>
           <div onClick={() => navigate(() => setPerpOpen(false), "pop")} style={{ cursor: "pointer", fontSize: 22, fontWeight: 300, padding: "0 4px", color: "#fff" }}>‹</div>
@@ -1162,7 +1163,7 @@ export default function App() {
     const toggle = (key) => setLocalSettings(s => ({ ...s, [key]: !s[key] }));
     const save = () => { setAgentSettings(localSettings); setAgentEnabled(localEnabled); showToast("✅ Agent settings saved"); navigate(() => setAgentOpen(false), "pop"); };
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#0a0a0a" }}>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: "#0a0a0a" }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", padding: "6px 10px", background: "#111", gap: 8, borderBottom: "0.5px solid #222" }}>
           <div onClick={() => navigate(() => setAgentOpen(false), "pop")} style={{ cursor: "pointer", fontSize: 22, fontWeight: 300, padding: "0 4px", color: "#fff" }}>‹</div>
@@ -1262,7 +1263,7 @@ export default function App() {
     const filters = ["all","trade","caller","alert","agent"];
     const filtered = notifFilter === "all" ? NOTIFICATIONS : NOTIFICATIONS.filter(n => n.type === notifFilter);
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%", background: BG }}>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: BG }}>
         <div style={{ display: "flex", alignItems: "center", padding: "6px 10px", background: TG, color: "#fff", gap: 8 }}>
           <div onClick={() => navigate(() => setNotifOpen(false), "pop")} style={{ cursor: "pointer", fontSize: 22, fontWeight: 300, padding: "0 4px" }}>‹</div>
           <div style={{ flex: 1, fontWeight: 600, fontSize: 16 }}>Notifications</div>
@@ -1318,7 +1319,7 @@ export default function App() {
   const DiscoveryScreen = () => {
     const filtered = searchQuery ? TRENDING_TOKENS.filter(t => t.token.toLowerCase().includes(searchQuery.toLowerCase()) || t.name.toLowerCase().includes(searchQuery.toLowerCase())) : TRENDING_TOKENS;
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%", background: BG }}>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: BG }}>
         <div style={{ display: "flex", alignItems: "center", padding: "6px 10px", background: TG, color: "#fff", gap: 8 }}>
           <div onClick={() => navigate(() => setDiscoveryOpen(false), "pop")} style={{ cursor: "pointer", fontSize: 22, fontWeight: 300, padding: "0 4px" }}>‹</div>
           <div style={{ flex: 1, fontWeight: 600, fontSize: 16 }}>🔍 Discover</div>
@@ -1424,7 +1425,7 @@ export default function App() {
     const rankColors = ["#FFD700","#C0C0C0","#CD7F32","#8E8E93","#8E8E93"];
     const [lbTab, setLbTab] = useState("groups");
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%", background: T.bg3 }}>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: T.bg3 }}>
         <div style={{ display: "flex", alignItems: "center", padding: "8px 16px 6px", background: T.headerBg, borderBottom: `0.5px solid ${T.border}` }}>
           <div onClick={() => navigate(() => setLeaderboardOpen(false), "pop")} style={{ cursor: "pointer", fontSize: 17, color: TG, marginRight: 8, padding: "2px 4px" }}>‹</div>
           <span style={{ fontSize: 17, fontWeight: 600, color: T.text, flex: 1, textAlign: "center" }}>Leaderboard</span>
@@ -1638,7 +1639,7 @@ export default function App() {
       </div>
     );
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%", background: T.bg3 }}>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: T.bg3 }}>
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 16px 6px", background: T.bg3 }}>
           <div style={{ width: 36, height: 36, borderRadius: 18, background: T.bg2, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1720,8 +1721,9 @@ export default function App() {
     const handleNext = () => {
       if (phone.length < 7) return;
       setAuthPhone(phone);
-      navigate(() => setAuthStep("code"), "push");
-      setTimeout(() => codeRef0.current?.focus(), 320);
+      flushSync(() => setAuthStep("code"));
+      codeRef0.current?.focus();
+      setTimer(60);
       setTimerActive(true);
     };
 
@@ -1753,7 +1755,7 @@ export default function App() {
       setTimer(60);
       setTimerActive(true);
       setCode(["", "", "", "", ""]);
-      setTimeout(() => codeRef0.current?.focus(), 100);
+      codeRef0.current?.focus();
     };
 
     if (authStep === "phone") return (
