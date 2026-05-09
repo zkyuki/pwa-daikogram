@@ -901,83 +901,139 @@ export default function App() {
   // ═══════════════════════════════════════
   // DAIKOGRAM TAB
   // ═══════════════════════════════════════
-  const DaikogramScreen = () => (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: T.bg3 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 16px 6px", background: T.headerBg }}>
-        <span style={{ fontSize: 17, fontWeight: 600, color: T.text }}>🏠 Home</span>
-        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-          <div onClick={() => navigate(() => setLeaderboardOpen(true))} style={{ cursor: "pointer" }} title="Leaderboard">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={TG} strokeWidth="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+  const DaikogramScreen = () => {
+    const accent = isDark ? "#8E7CFF" : PURPLE;
+    const surface = isDark ? "#151519" : "#fff";
+    const pageBg = isDark ? "#08080A" : "#FBFAF8";
+    const softText = isDark ? "#9898A3" : "#9B9BA2";
+    const cardBorder = isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(28,28,35,0.08)";
+    const cardShadow = isDark ? "none" : "0 10px 26px rgba(25,25,35,0.06)";
+    const walletLine = [38,40,39,43,49,47,55,61,59,67,75,83,91,89,98,105];
+    const trendRows = [
+      { token: "$DEGEN", change: "+184%", mc: "$420K", c: "linear-gradient(135deg,#4AF2B4,#28D4DF)", callers: 12, badges: [["C","#E88B58"],["A","#7D9BFA"],["K","#ED5EA4"]], msgId: "call1", data: [8,9,9,11,10,12,14,13,16,17,19,20,22] },
+      { token: "$SHILL", change: "+320%", mc: "$180K", c: "linear-gradient(135deg,#B07BFF,#F057C8)", callers: 23, badges: [["A","#7995F2"],["W","#26C0A7"]], msgId: "call2", data: [7,7,8,9,11,14,15,17,19,22,25,29] },
+      { token: "$PUMP", change: "+42%", mc: "$1.2M", c: "linear-gradient(135deg,#FF9358,#FFD262)", callers: 8, badges: [["W","#23AFC3"],["C","#E56C4B"],["D","#F0A33B"]], msgId: "call3", data: [12,13,14,16,17,19,21,24,25,27,30,34] },
+    ];
+    const topCallers = [CALLERS[1], CALLERS[0], CALLERS[2]];
+
+    const IconButton = ({ children, onClick, badge }) => (
+      <div onClick={onClick} style={{ position: "relative", width: 54, height: 54, borderRadius: 19, background: surface, border: cardBorder, boxShadow: isDark ? "none" : "0 6px 16px rgba(20,20,30,0.06)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+        {children}
+        {badge && <div style={{ position: "absolute", top: 12, right: 12, width: 11, height: 11, borderRadius: 6, background: accent, border: `2px solid ${surface}` }} />}
+      </div>
+    );
+
+    const ActionButton = ({ kind, icon, label, onClick }) => (
+      <div onClick={(e) => { e.stopPropagation(); onClick?.(); }} style={{ flex: 1, minWidth: 0, height: 64, borderRadius: 16, background: kind === "primary" ? accent : (isDark ? "#1F1F24" : "#F8F6F2"), border: kind === "primary" ? "none" : cardBorder, color: kind === "primary" ? "#fff" : T.text, display: "flex", alignItems: "center", justifyContent: "center", gap: 9, fontSize: 16, fontWeight: 800, boxShadow: kind === "primary" ? `0 12px 22px ${accent}40` : "none", cursor: "pointer" }}>
+        <span style={{ fontSize: 22, lineHeight: 1 }}>{icon}</span>
+        <span>{label}</span>
+      </div>
+    );
+
+    const CallerBadges = ({ badges }) => (
+      <div style={{ display: "inline-flex", alignItems: "center", marginLeft: 8, marginRight: 4 }}>
+        {badges.map((b, i) => (
+          <span key={`${b[0]}-${i}`} style={{ width: 21, height: 21, borderRadius: 6, background: b[1], color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 900, marginLeft: i ? -5 : 0, border: `1.5px solid ${surface}` }}>{b[0]}</span>
+        ))}
+      </div>
+    );
+
+    const TrendCard = ({ row }) => (
+      <div style={{ background: surface, borderRadius: 23, border: cardBorder, boxShadow: cardShadow, padding: "18px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 12 }}>
+        <div onClick={() => goToCall(row.msgId)} style={{ display: "flex", alignItems: "center", gap: 14, flex: 1, minWidth: 0, cursor: "pointer" }}>
+          <div style={{ width: 62, height: 62, borderRadius: 20, background: row.c, display: "flex", alignItems: "center", justifyContent: "center", color: "#121219", fontSize: 27, fontWeight: 900, flexShrink: 0 }}>{row.token[1]}</div>
+          <div style={{ minWidth: 0, flex: 1, overflow: "hidden" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              <span style={{ fontSize: 19, color: T.text, fontWeight: 900, letterSpacing: -0.8, whiteSpace: "nowrap" }}>{row.token}</span>
+              <span style={{ color: GREEN, fontSize: 18, fontWeight: 900, whiteSpace: "nowrap" }}>{row.change}</span>
+            </div>
+            <div style={{ marginTop: 4, display: "flex", alignItems: "center", color: softText, fontSize: 17, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden" }}>
+              <span>MC {row.mc}</span>
+              <span style={{ padding: "0 8px" }}>·</span>
+              <CallerBadges badges={row.badges} />
+              <span>{row.callers} callers</span>
+            </div>
           </div>
-          <div onClick={() => navigate(() => setDiscoveryOpen(true))} style={{ cursor: "pointer" }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={TG} strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        </div>
+        <div style={{ width: 92, flexShrink: 0, alignSelf: "stretch", display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "space-between", gap: 9 }}>
+          <div style={{ width: 92, paddingTop: 5 }}>
+            <Sparkline data={row.data} color="#49F3A2" width={92} height={28} />
           </div>
-          <div onClick={() => navigate(() => setNotifOpen(true))} style={{ position: "relative", cursor: "pointer" }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={TG} strokeWidth="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-            {NOTIFICATIONS.filter(n=>!n.read).length > 0 && <div style={{ position: "absolute", top: -2, right: -2, width: 8, height: 8, borderRadius: 4, background: RED, border: "1.5px solid #EFEFF4" }}/>}
-          </div>
+          <div onClick={(e) => { e.stopPropagation(); navigate(() => setTradeToken(row.token)); }} style={{ minWidth: 84, height: 52, borderRadius: 17, background: accent, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 18, cursor: "pointer", boxShadow: `0 10px 20px ${accent}45` }}>Buy</div>
         </div>
       </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 16px" }}>
-        <div style={{ fontSize: 13, color: "#8E8E93", fontWeight: 500, padding: "8px 0 6px" }}>PORTFOLIO</div>
-        <div onClick={() => navigate(() => setPortfolioOpen(true))} style={{ background: T.card, borderRadius: 12, padding: "14px", marginBottom: 12, cursor: "pointer", boxShadow: isDark?"none":"0 1px 3px rgba(0,0,0,0.06)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div><div style={{ fontSize: 13, color: T.text2 }}>Total Value</div><div style={{ fontSize: 28, fontWeight: 700, color: T.text, marginTop: 2 }}>$1,247.50</div></div>
-            <div style={{ textAlign: "right" }}><div style={{ fontSize: 13, color: GREEN, fontWeight: 600 }}>+12.4%</div><div style={{ fontSize: 13, color: "#8E8E93" }}>today</div></div>
-          </div>
-          <div style={{ marginTop: 8 }}><Sparkline data={[800,820,810,850,900,880,950,1000,980,1050,1100,1150,1200,1180,1247]} width={300} height={40} /></div>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C7C7CC" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
-          </div>
-        </div>
+    );
 
-        <div style={{ fontSize: 13, color: T.text2, fontWeight: 500, padding: "4px 0 6px", letterSpacing: 0.3 }}>TRENDING CALLS</div>
-        {[
-          { token: "$DEGEN", change: "+184%", mc: "$420K", c: "#00C853", members: 12, groups: ["CAVE","AlphaDAO","+2"], msgId: "call1" },
-          { token: "$PUMP", change: "+42%", mc: "$1.2M", c: "#FF6D00", members: 8, groups: ["Solana Builders","DeFi Alpha","+1"], msgId: "call3" },
-          { token: "$SHILL", change: "+320%", mc: "$180K", c: "#7C4DFF", members: 23, groups: ["CAVE","MetaDAO","+3"], msgId: "call2" },
-        ].map((t, i) => (
-          <div key={i} style={{ background: T.card, borderRadius: 14, padding: "12px", marginBottom: 8, display: "flex", alignItems: "center", gap: 10, boxShadow: isDark?"none":"0 1px 3px rgba(0,0,0,0.06)" }}>
-            {/* Left area tappable → Chat at that call */}
-            <div onClick={() => goToCall(t.msgId)} style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0, cursor: "pointer" }}>
-              <div style={{ width: 42, height: 42, borderRadius: 21, background: t.c, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, color: "#fff", flexShrink: 0 }}>{t.token[1]}</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontWeight: 700, fontSize: 16, color: T.text }}>{t.token}</span>
-                  <span style={{ fontSize: 12, color: GREEN, fontWeight: 600 }}>{t.change}</span>
-                  <span style={{ fontSize: 12, color: T.text2 }}>MC {t.mc}</span>
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100%", background: pageBg }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: "10px 24px 22px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 22 }}>
+            <div>
+              <div style={{ color: softText, fontSize: 16, fontWeight: 800, letterSpacing: 1.8, textTransform: "uppercase", marginBottom: 7 }}>Good evening</div>
+              <div style={{ color: T.text, fontSize: 30, fontWeight: 900, letterSpacing: -1.1 }}>Alex</div>
+            </div>
+            <div style={{ display: "flex", gap: 12 }}>
+              <IconButton onClick={() => navigate(() => setDiscoveryOpen(true))}>
+                <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke={T.text} strokeWidth="2.2" strokeLinecap="round"><circle cx="11" cy="11" r="7.5"/><path d="M20 20l-3.6-3.6"/></svg>
+              </IconButton>
+              <IconButton onClick={() => navigate(() => setNotifOpen(true))} badge={NOTIFICATIONS.some(n => !n.read)}>
+                <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke={T.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 8.5-3 8.5h18S18 15 18 8"/><path d="M13.6 20a2 2 0 0 1-3.2 0"/></svg>
+              </IconButton>
+            </div>
+          </div>
+
+          <div onClick={() => navigate(() => setPortfolioOpen(true))} style={{ position: "relative", overflow: "hidden", background: `linear-gradient(145deg, ${isDark ? "#16161B" : "#fff"} 0%, ${isDark ? "#111116" : "#FFF"} 56%, ${isDark ? "#10201D" : "#F5FFFC"} 100%)`, borderRadius: 28, border: cardBorder, boxShadow: cardShadow, padding: "36px 24px 30px", marginBottom: 31, cursor: "pointer" }}>
+            <div style={{ position: "absolute", inset: 0, background: `radial-gradient(circle at 6% 0%, ${accent}12, transparent 40%), radial-gradient(circle at 96% 98%, ${GREEN}13, transparent 42%)`, pointerEvents: "none" }} />
+            <div style={{ position: "relative" }}>
+              <div style={{ color: softText, fontSize: 16, fontWeight: 900, letterSpacing: 2.2, textTransform: "uppercase", marginBottom: 13 }}>Portfolio · Daikogram Wallet</div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 5, marginBottom: 10 }}>
+                <span style={{ color: T.text, fontSize: "clamp(45px, 12.6vw, 58px)", fontWeight: 900, letterSpacing: -3.8, lineHeight: 1 }}>$12,847</span>
+                <span style={{ color: isDark ? "#777780" : "#A3A3AA", fontSize: "clamp(45px, 12.6vw, 58px)", fontWeight: 900, letterSpacing: -3.8, lineHeight: 1 }}>.50</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 13, marginBottom: 25 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, height: 31, padding: "0 15px", borderRadius: 16, background: isDark ? "rgba(52,199,89,0.16)" : "#DDF8EA", color: "#18A864", fontSize: 16, fontWeight: 900 }}>
+                  <span style={{ fontSize: 15 }}>⌃</span>
+                  <span>+$612.40 · +12.4%</span>
                 </div>
-                <div style={{ fontSize: 13, color: T.text2, marginTop: 2 }}>{t.members} members · {t.groups.join(", ")}</div>
+                <span style={{ color: softText, fontSize: 17, fontWeight: 600 }}>today</span>
+              </div>
+              <div style={{ padding: "4px 2px 24px" }}>
+                <Sparkline data={walletLine} color={accent} width={430} height={90} />
+              </div>
+              <div style={{ display: "flex", gap: 12 }}>
+                <ActionButton kind="primary" icon="↑" label="Send" onClick={() => showToast("Send coming soon")} />
+                <ActionButton icon="↓" label="Receive" onClick={() => showToast("Receive coming soon")} />
+                <ActionButton icon="↙↗" label="Swap" onClick={() => showToast("Swap coming soon")} />
               </div>
             </div>
-            {/* Buy button → Trade */}
-            <div onClick={(e) => { e.stopPropagation(); navigate(() => setTradeToken(t.token)); }} style={{ flexShrink: 0, padding: "8px 16px", borderRadius: 10, background: GREEN, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", letterSpacing: 0.2 }}>Buy</div>
           </div>
-        ))}
-        {/* See all calls */}
-        <div style={{ textAlign: "center", padding: "4px 0 10px", cursor: "pointer" }}>
-          <span style={{ fontSize: 15, color: TG, fontWeight: 500 }}>› See all calls</span>
-        </div>
 
-        <div style={{ fontSize: 13, color: T.text2, fontWeight: 500, padding: "10px 0 6px", letterSpacing: 0.3 }}>TOP CALLERS</div>
-        {CALLERS.map((c, i) => (
-          <div key={i} onClick={() => navigate(() => { setCallerIdx(i); setChatOpen("daikogram_caller"); })} style={{ background: T.card, borderRadius: 14, padding: "12px", marginBottom: 8, display: "flex", alignItems: "center", gap: 10, cursor: "pointer", boxShadow: isDark?"none":"0 1px 3px rgba(0,0,0,0.06)" }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: i<3?["#FFD700","#C0C0C0","#CD7F32"][i]:"#C7C7CC", width: 20, textAlign: "center" }}>{i+1}</div>
-            <div style={{ width: 36, height: 36, borderRadius: 18, background: c.c, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 16 }}>{c.name[0].toUpperCase()}</div>
-            <div style={{ flex: 1 }}><div style={{ fontWeight: 600, fontSize: 15, color: T.text }}>{c.name}</div><div style={{ fontSize: 12, color: T.text2 }}>WR {c.wr} · Avg {c.avg}</div></div>
-            <div style={{ fontWeight: 700, fontSize: 14, color: GREEN }}>{c.pnl}</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <div style={{ color: softText, fontSize: 16, fontWeight: 900, letterSpacing: 2.4, textTransform: "uppercase" }}>Trending from your groups</div>
+            <div onClick={() => navigate(() => setDiscoveryOpen(true))} style={{ color: accent, fontSize: 17, fontWeight: 800, cursor: "pointer" }}>See all</div>
           </div>
-        ))}
+          {trendRows.map(row => <TrendCard key={row.token} row={row} />)}
 
-        {/* See all callers */}
-        <div style={{ textAlign: "center", padding: "0 0 10px", cursor: "pointer" }}>
-          <span style={{ fontSize: 15, color: TG, fontWeight: 500 }}>› See all callers</span>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "34px 0 12px" }}>
+            <div style={{ color: softText, fontSize: 16, fontWeight: 900, letterSpacing: 2.4, textTransform: "uppercase" }}>Top callers · 30d</div>
+            <div onClick={() => navigate(() => setLeaderboardOpen(true))} style={{ color: accent, fontSize: 17, fontWeight: 800, cursor: "pointer" }}>Leaderboard</div>
+          </div>
+          {topCallers.map((c, i) => (
+            <div key={c.name} onClick={() => navigate(() => { setCallerIdx(CALLERS.findIndex(item => item.name === c.name)); setChatOpen("daikogram_caller"); })} style={{ background: surface, borderRadius: 23, border: cardBorder, boxShadow: cardShadow, padding: "16px 20px", marginBottom: 14, display: "flex", alignItems: "center", gap: 16, cursor: "pointer" }}>
+              <div style={{ width: 34, color: i === 0 ? "#D58E2F" : softText, fontSize: 18, fontWeight: 900, fontVariantNumeric: "tabular-nums" }}>{String(i + 1).padStart(2, "0")}</div>
+              <div style={{ width: 58, height: 58, borderRadius: 18, background: i === 0 ? accent : c.c, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 25, fontWeight: 900 }}>{c.name[0].toUpperCase()}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ color: T.text, fontSize: 18, fontWeight: 900, letterSpacing: -0.4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
+                <div style={{ color: softText, fontSize: 15, fontWeight: 600, marginTop: 4 }}>WR {c.wr} · Avg {c.avg}</div>
+              </div>
+              <div style={{ color: GREEN, fontSize: 18, fontWeight: 900 }}>{c.pnl}</div>
+            </div>
+          ))}
+          <div style={{ height: 8 }} />
         </div>
-
-        <div style={{ height: 16 }} />
       </div>
-    </div>
-  );
+    );
+  };
 
   // ═══════════════════════════════════════
   // PERP TRADE SCREEN (NEW)
