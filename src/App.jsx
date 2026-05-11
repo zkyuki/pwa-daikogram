@@ -1,2166 +1,1745 @@
-import { useState, useCallback, useRef, useEffect } from "react";
-import { flushSync } from "react-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import chatsBg from "./assets/chats-bg.png";
+import chatPattern from "./assets/chat-pattern.png";
 
-// ─── View Transition CSS ───────────────────────────────────────
-const VT_STYLES = `
-  ::view-transition-old(screen) {
-    animation: none;
-  }
-  ::view-transition-new(screen) {
-    animation: none;
-  }
+const U = ["#E66866", "#5DAB35", "#E0904D", "#2EA6DA", "#9A5BAA", "#2DAFA0", "#D27EAF", "#5C6AC4"];
 
-  /* push: new screen slides in from right, old slides out to left */
-  :root[data-vt="push"] ::view-transition-old(screen) {
-    animation: vt-slide-out-left 280ms cubic-bezier(0.4,0,0.2,1) forwards;
-  }
-  :root[data-vt="push"] ::view-transition-new(screen) {
-    animation: vt-slide-in-right 280ms cubic-bezier(0.4,0,0.2,1) forwards;
-  }
+const callerProfileDefaults = (name, id = 0) => ({
+  username: `@${name.replace(/[^a-zA-Z0-9_]/g, "").toLowerCase() || "caller"}`,
+  birthday: id % 3 === 0 ? "14 Aug 2001 (24 years old)" : id % 3 === 1 ? "7 Nov 1998 (27 years old)" : "2 Feb 2000 (26 years old)",
+  status: id % 2 === 0 ? "online" : "last seen today at 18:07",
+});
 
-  /* pop: new screen slides in from left, old slides out to right */
-  :root[data-vt="pop"] ::view-transition-old(screen) {
-    animation: vt-slide-out-right 260ms cubic-bezier(0.4,0,0.2,1) forwards;
-  }
-  :root[data-vt="pop"] ::view-transition-new(screen) {
-    animation: vt-slide-in-left 260ms cubic-bezier(0.4,0,0.2,1) forwards;
-  }
+const CALLERS = [
+  { id: 0, name: "cryptokid.sol", username: "@cryptokid_sol", birthday: "18 Sep 1999 (26 years old)", status: "online", meta: "Top 10% caller", wr: "74%", avg: "8.4x", pnl: "+$42.6K", calls: 127, wins: 94, losses: 33, followers: "2.1K", color: U[0] },
+  { id: 1, name: "alphahunter", username: "@alphahunter", birthday: "7 Nov 1998 (27 years old)", status: "last seen today at 18:07", meta: "Signal desk", wr: "81%", avg: "12.1x", pnl: "+$96.2K", calls: 89, wins: 72, losses: 17, followers: "4.8K", color: U[4] },
+  { id: 2, name: "whalemaster", username: "@whalemaster", birthday: "2 Feb 2000 (26 years old)", status: "last seen 12 minutes ago", meta: "Large-cap caller", wr: "68%", avg: "4.2x", pnl: "+$18.9K", calls: 203, wins: 138, losses: 65, followers: "1.3K", color: U[5] },
+  { id: 3, name: "degenking", username: "@degenking", birthday: "14 Aug 2001 (24 years old)", status: "last seen today at 17:48", meta: "Early memes", wr: "62%", avg: "6.7x", pnl: "+$11.4K", calls: 56, wins: 35, losses: 21, followers: "890", color: U[2] },
+];
 
-  /* tab: fade + subtle scale (iOS tab switch feel) */
-  :root[data-vt="tab"] ::view-transition-old(screen) {
-    animation: vt-tab-out 180ms ease forwards;
-  }
-  :root[data-vt="tab"] ::view-transition-new(screen) {
-    animation: vt-tab-in 220ms ease forwards;
-  }
+const GROUP_CALLERS = [
+  ...CALLERS,
+  { id: 4, name: "solanaSensei", wr: "69%", avg: "5.8x", pnl: "+$32.4K", calls: 78, wins: 54, losses: 24, color: U[6] },
+  { id: 5, name: "pumpwatcher", wr: "66%", avg: "4.9x", pnl: "+$28.1K", calls: 91, wins: 60, losses: 31, color: U[7] },
+  { id: 6, name: "perpTony", wr: "64%", avg: "3.7x", pnl: "+$24.8K", calls: 66, wins: 42, losses: 24, color: "#111" },
+  { id: 7, name: "kalshiLin", wr: "61%", avg: "2.6x", pnl: "+$19.6K", calls: 58, wins: 35, losses: 23, color: U[5] },
+  { id: 8, name: "memeMechanic", wr: "58%", avg: "3.1x", pnl: "+$15.2K", calls: 84, wins: 49, losses: 35, color: U[3] },
+  { id: 9, name: "lowcapLily", wr: "55%", avg: "2.4x", pnl: "+$11.9K", calls: 73, wins: 40, losses: 33, color: U[2] },
+  { id: 10, name: "tokyoWhale", wr: "72%", avg: "6.2x", pnl: "+$38.4K", calls: 64, wins: 46, losses: 18, color: "#2EA6DA" },
+  { id: 11, name: "mcapMori", wr: "63%", avg: "4.1x", pnl: "+$17.8K", calls: 52, wins: 33, losses: 19, color: "#5DAB35" },
+  { id: 12, name: "chainScout", wr: "59%", avg: "3.6x", pnl: "+$13.3K", calls: 47, wins: 28, losses: 19, color: "#9A5BAA" },
+  { id: 13, name: "snipeSensei", wr: "57%", avg: "2.9x", pnl: "+$9.6K", calls: 41, wins: 23, losses: 18, color: "#E0904D" },
+];
 
-  @keyframes vt-slide-out-left {
-    from { transform: translateX(0); opacity: 1; }
-    to   { transform: translateX(-30%); opacity: 0.6; }
-  }
-  @keyframes vt-slide-in-right {
-    from { transform: translateX(100%); opacity: 0.8; }
-    to   { transform: translateX(0); opacity: 1; }
-  }
-  @keyframes vt-slide-out-right {
-    from { transform: translateX(0); opacity: 1; }
-    to   { transform: translateX(100%); opacity: 0.8; }
-  }
-  @keyframes vt-slide-in-left {
-    from { transform: translateX(-30%); opacity: 0.6; }
-    to   { transform: translateX(0); opacity: 1; }
-  }
-  @keyframes vt-tab-out {
-    from { opacity: 1; transform: scale(1); }
-    to   { opacity: 0; transform: scale(0.97); }
-  }
-  @keyframes vt-tab-in {
-    from { opacity: 0; transform: scale(0.97); }
-    to   { opacity: 1; transform: scale(1); }
-  }
-`;
+const TOKENS = [
+  { ticker: "$DEGEN", name: "DegenProtocol", change: "+184%", mc: "$420K", vol: "$1.2M", liq: "$85K", ath: "$0.0089", price: "$0.0042", calls: 15, color: "linear-gradient(135deg,#34C759,#2EA6DA)", data: [12, 15, 14, 18, 22, 20, 28, 35, 32, 38, 42, 45, 40, 48] },
+  { ticker: "$SHILL", name: "ShillDAO", change: "+320%", mc: "$180K", vol: "$890K", liq: "$62K", ath: "$0.00042", price: "$0.00018", calls: 23, color: "linear-gradient(135deg,#9A5BAA,#2EA6DA)", data: [5, 8, 7, 14, 20, 18, 30, 42, 38, 55, 62, 70, 65, 82] },
+  { ticker: "$PUMP", name: "PumpFun V2", change: "+42%", mc: "$1.2M", vol: "$4.5M", liq: "$210K", ath: "$0.0028", price: "$0.0012", calls: 8, color: "linear-gradient(135deg,#E0904D,#FFB300)", data: [30, 32, 29, 35, 38, 42, 40, 45, 50, 48, 55, 62, 60, 68] },
+  { ticker: "$MOON", name: "MoonShot", change: "+1,240%", mc: "$45K", vol: "$220K", liq: "$28K", ath: "$0.031", price: "$0.018", calls: 31, color: "linear-gradient(135deg,#FFB300,#34C759)", data: [4, 5, 9, 8, 12, 20, 32, 50, 78, 120, 138, 155, 170, 188] },
+  { ticker: "$BONK", name: "BonkInu", change: "+89%", mc: "$8.4M", vol: "$32M", liq: "$1.1M", ath: "$0.000044", price: "$0.000029", calls: 6, color: "linear-gradient(135deg,#E66866,#E0904D)", data: [22, 24, 25, 28, 30, 29, 34, 37, 36, 40, 44, 45, 48, 50] },
+  { ticker: "$PEPE", name: "Pepe2.0", change: "-12%", mc: "$2.1M", vol: "$890K", liq: "$320K", ath: "$0.00019", price: "$0.00009", calls: 2, color: "linear-gradient(135deg,#5DAB35,#FF3B30)", data: [50, 48, 46, 42, 44, 40, 38, 35, 37, 32, 30, 28, 29, 24] },
+];
 
-// inject styles once
-if (typeof document !== "undefined" && !document.getElementById("vt-styles")) {
-  const el = document.createElement("style");
-  el.id = "vt-styles";
-  el.textContent = VT_STYLES;
-  document.head.appendChild(el);
-}
-
-// ─── Rubber-Band Scroll Hook ───────────────────────────────────
-const TG = "#3390EC";
-const BG = "#EFEFF4";
-const GREEN = "#34C759";
-const RED = "#FF3B30";
-const ORANGE = "#FF9500";
-const PURPLE = "#7C4DFF";
-
-const Sparkline = ({ data, color = GREEN, width = 200, height = 26 }) => {
-  const min = Math.min(...data), max = Math.max(...data), range = max - min || 1;
-  const pts = data.map((v, i) => `${(i / (data.length - 1)) * width},${height - ((v - min) / range) * (height - 4) - 2}`).join(" ");
-  return <svg width={width} height={height} style={{ display: "block", width: "100%" }}><polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+const MARKET_TOKENS = {
+  TSLA: { ticker: "$TSLA", name: "Tesla Perp", change: "+3.8%", mc: "$812B", vol: "$2.4B", liq: "$42M", ath: "$414.50", price: "$184.20", calls: 18, color: "linear-gradient(135deg,#111111,#E66866)", data: [120, 122, 121, 126, 130, 128, 134, 138, 136, 142, 147, 146, 151, 156] },
+  BTC: { ticker: "$BTC", name: "Bitcoin Perp", change: "+1.6%", mc: "$2.01T", vol: "$18.6B", liq: "$94M", ath: "$112K", price: "$101,840", calls: 24, color: "linear-gradient(135deg,#FFB300,#E0904D)", data: [90, 92, 91, 94, 96, 95, 98, 101, 99, 103, 106, 105, 109, 111] },
+  SOL: { ticker: "$SOL", name: "Solana Perp", change: "-2.4%", mc: "$84B", vol: "$3.2B", liq: "$38M", ath: "$294", price: "$164.80", calls: 16, color: "linear-gradient(135deg,#5C6AC4,#2DAFA0)", data: [120, 118, 117, 119, 115, 113, 116, 112, 110, 109, 111, 108, 106, 104] },
+  FOMC: { ticker: "FOMC", name: "Fed cuts in June?", marketType: "prediction", market: "Kalshi", question: "Will the Fed cut rates at the June meeting?", change: "+9.2%", mc: "$7.4M", vol: "$640K", liq: "$210K", ath: "64¢", price: "41¢", calls: 11, color: "linear-gradient(135deg,#339DFF,#5C6AC4)", data: [20, 22, 21, 24, 28, 31, 29, 35, 39, 37, 42, 45, 48, 51] },
+  CPI: { ticker: "CPI", name: "CPI under 3.0%?", marketType: "prediction", market: "Kalshi", question: "Will US CPI print below 3.0% this month?", change: "+4.5%", mc: "$3.1M", vol: "$280K", liq: "$96K", ath: "58¢", price: "37¢", calls: 9, color: "linear-gradient(135deg,#2DAFA0,#34C759)", data: [30, 29, 32, 34, 33, 36, 38, 37, 40, 43, 42, 45, 47, 49] },
 };
 
-const CandleChart = ({ h = 100 }) => {
-  const candles = [{o:40,h:55,l:35,c:50},{o:50,h:60,l:45,c:44},{o:44,h:52,l:40,c:48},{o:48,h:58,l:46,c:56},{o:56,h:62,l:50,c:52},{o:52,h:54,l:42,c:45},{o:45,h:50,l:38,c:47},{o:47,h:55,l:44,c:53},{o:53,h:60,l:48,c:58},{o:58,h:65,l:55,c:62},{o:62,h:68,l:58,c:60},{o:60,h:63,l:52,c:54},{o:54,h:59,l:50,c:57},{o:57,h:64,l:53,c:61},{o:61,h:66,l:56,c:58}];
-  const w = 300, cw = 12, gap = 8;
-  const allV = candles.flatMap(c => [c.h, c.l]);
-  const mn = Math.min(...allV), mx = Math.max(...allV);
-  const s = v => h - ((v - mn) / (mx - mn)) * (h - 8) - 4;
+const DITT_TOKEN = {
+  ticker: "$DITT",
+  name: "Ditto",
+  change: "+58%",
+  mc: "$96K",
+  vol: "$310K",
+  liq: "$42K",
+  ath: "$0.0018",
+  price: "$0.00031",
+  calls: 7,
+  color: "linear-gradient(135deg,#2DAFA0,#339DFF)",
+  data: [8, 9, 11, 10, 13, 17, 16, 21, 24, 23, 28, 31, 30, 36],
+  description: "Ditto is a CAVE-discovered Solana memecoin with early holder growth, clean liquidity, and live Daikogram call flow.",
+};
+
+const ALL_TOKENS = [...TOKENS, DITT_TOKEN, ...Object.values(MARKET_TOKENS)];
+
+const CHATS = [
+  { id: "cave", title: "CAVE meme alpha group", avatar: "C", color: "linear-gradient(135deg,#5C6AC4,#34C759)", message: "haru: $DITT flow looks clean", time: "18:31", unread: 763, meta: "3,146 members, 189 online" },
+  { id: "tony", title: "Tony's calls (Hyperliquid perp)", avatar: "T", color: "linear-gradient(135deg,#050505,#339DFF)", message: "Tony: BTC long is still valid above 101.2K", time: "18:30", unread: 12, muted: true, meta: "" },
+  { id: "lin", title: "Lin's insights for Kalshi", avatar: "L", color: "linear-gradient(135deg,#2DAFA0,#FFB300)", message: "Lin: FOMC cut odds moved too far", time: "18:28", unread: 4, meta: "" },
+];
+
+const CONTACTS = [
+  { name: "Noah", meta: "last seen 4 minutes ago", avatar: "N", color: "#F3E96F", star: true },
+  { name: "Yutaro | JP Windfall", meta: "last seen 6 minutes ago", avatar: "Y", color: "#CAD2FF" },
+  { name: "Bee-utiful bee tomato", meta: "last seen 6 minutes ago", avatar: "B", color: "#F5D36D" },
+  { name: "256hax | Superteam JP", meta: "last seen 10 minutes ago", avatar: "2", color: "#EFA0BB" },
+  { name: "SEN UHI", meta: "last seen 35 minutes ago", avatar: "S", color: "#B7D4FF" },
+  { name: "Mike Eidlin", meta: "last seen 2 hours ago", avatar: "M", color: "#F8EAD7" },
+  { name: "Rocky Rocks 873", meta: "last seen 4 hours ago", avatar: "RR", color: "#86D477", star: true },
+  { name: "Fly", meta: "last seen 9 hours ago", avatar: "F", color: "#16171B" },
+  { name: "asuma | Daiko AI", meta: "last seen 11 hours ago", avatar: "A", color: "#5E7C5E", star: true },
+  { name: "Olivia Lo | BitGo (NYC)", meta: "last seen 12 hours ago", avatar: "O", color: "#F44336", star: true },
+  { name: "Thomukas1", meta: "last seen yesterday at 22:08", avatar: "T", color: "#75D7C8" },
+];
+
+const RECENT_CALLS = [
+  { name: "Sam Sam | Aphelion", detail: "Outgoing (1 min)", date: "Fri", video: true, avatar: "S", color: "#93A4CC" },
+  { name: "Sam Sam | Aphelion", detail: "Outgoing", date: "Tue", video: true, avatar: "S", color: "#93A4CC" },
+  { name: "Sam Sam | Aphelion", detail: "Outgoing", date: "Tue", avatar: "S", color: "#93A4CC" },
+  { name: "Sam Sam | Aphelion", detail: "Outgoing (26 sec)", date: "04/30", avatar: "S", color: "#93A4CC" },
+  { name: "Sam Sam | Aphelion", detail: "Outgoing", date: "04/27", avatar: "S", color: "#93A4CC" },
+  { name: "Sam Sam | Aphelion", detail: "Outgoing (13 sec)", date: "04/04", avatar: "S", color: "#93A4CC" },
+  { name: "Yuma JP", detail: "Outgoing", date: "04/04", avatar: "Y", color: "#66D9D9" },
+  { name: "Atsushi", detail: "Outgoing", date: "04/04", avatar: "A", color: "#CDBBEB" },
+];
+
+const SETTINGS_GROUPS = [
+  [{ label: "My Profile", icon: "user", color: "#F45B55" }],
+  [{ label: "Wallet", icon: "wallet", color: "#4099FF" }],
+  [
+    { label: "Saved Messages", icon: "bookmark", color: "#4099FF" },
+    { label: "Recent Calls", icon: "calls", color: "#62D96B" },
+    { label: "Devices", icon: "devices", color: "#FDBB45", value: "7" },
+    { label: "Chat Folders", icon: "folder", color: "#62BDEB" },
+  ],
+  [
+    { label: "Privacy and Security", icon: "lock", color: "#B8B8BE" },
+    { label: "Notifications and Sounds", icon: "bell", color: "#FF3B30" },
+  ],
+];
+
+const MESSAGES = [
+  { type: "date", label: "Today" },
+  { type: "msg", user: "solhunter.sol", userId: 2, text: "GM everyone. Market looks good today, let's go hard", time: "13:02" },
+  { type: "msg", user: "ren", userId: 5, text: "BTC dominance is dropping. Alt season might be coming.", time: "13:05" },
+  { type: "own", text: "SOL is doing well too", time: "13:06" },
+  { type: "call", caller: CALLERS[0], token: TOKENS[0], time: "14:30" },
+  { type: "msg", user: "pepelord", userId: 3, text: "aping 2 SOL", time: "14:31" },
+  { type: "own", text: "Chart looks good. Put in 0.5 SOL", time: "14:32" },
+  { type: "call", caller: CALLERS[1], token: TOKENS[1], time: "16:12" },
+  { type: "msg", user: "Kate", userId: 6, text: "Was watching $SHILL too. MC is small but the flow is real.", time: "16:14" },
+  { type: "own", text: "alphahunter WR 81%... should I ape", time: "16:15" },
+  { type: "call", caller: CALLERS[2], token: TOKENS[2], time: "19:45" },
+];
+
+const CALLER_CALL_HISTORY = [
+  ["$DEGEN", "$34K", "$300K", "2 hours ago", "+782%", TOKENS[0]],
+  ["$SHILL", "$72K", "$640K", "4 hours ago", "+789%", TOKENS[1]],
+  ["$MOON", "$18K", "$1.1M", "Yesterday", "+6,011%", TOKENS[3]],
+  ["$PUMP", "$180K", "$420K", "04/30", "+133%", TOKENS[2]],
+  ["$BONK", "$6.2M", "$8.4M", "04/28", "+35%", TOKENS[4]],
+  ["$PEPE", "$2.4M", "$2.1M", "04/26", "-12%", TOKENS[5]],
+  ["$WIF", "$410K", "$980K", "04/24", "+139%", { ...TOKENS[3], ticker: "$WIF", name: "Dogwifhat", color: "linear-gradient(135deg,#F7C76D,#E0904D)" }],
+  ["$JUP", "$820K", "$1.4M", "04/21", "+70%", { ...TOKENS[2], ticker: "$JUP", name: "Jupiter", color: "linear-gradient(135deg,#2DAFA0,#339DFF)" }],
+  ["$MEW", "$96K", "$61K", "04/19", "-36%", { ...TOKENS[5], ticker: "$MEW", name: "Cat in Dogs World", color: "linear-gradient(135deg,#D27EAF,#FF3B30)" }],
+  ["$POPCAT", "$230K", "$790K", "04/16", "+243%", { ...TOKENS[0], ticker: "$POPCAT", name: "Popcat", color: "linear-gradient(135deg,#5C6AC4,#D27EAF)" }],
+  ["$GOAT", "$1.8M", "$1.2M", "04/12", "-33%", { ...TOKENS[5], ticker: "$GOAT", name: "Goatseus Maximus", color: "linear-gradient(135deg,#111,#FF3B30)" }],
+  ["$BOME", "$540K", "$2.8M", "04/08", "+419%", { ...TOKENS[4], ticker: "$BOME", name: "Book of Meme", color: "linear-gradient(135deg,#34C759,#FFB300)" }],
+];
+
+const GROUP_CALL_HISTORY = [
+  [CALLERS[0], "$DEGEN", "$34K MC", "2 hours ago", TOKENS[0]],
+  [CALLERS[1], "$SHILL", "$72K MC", "4 hours ago", TOKENS[1]],
+  [CALLERS[2], "$PUMP", "$180K MC", "Yesterday", TOKENS[2]],
+  [CALLERS[3], "$MOON", "$18K MC", "2 days ago", TOKENS[3]],
+  [GROUP_CALLERS[4], "$BONK", "$6.2M MC", "04/30", TOKENS[4]],
+  [GROUP_CALLERS[6], "$TSLA", "$812B MC", "04/29", MARKET_TOKENS.TSLA],
+  [GROUP_CALLERS[7], "$FOMC", "$7.4M MC", "04/28", MARKET_TOKENS.FOMC],
+  [GROUP_CALLERS[10], "$DITT", "$96K MC", "04/27", DITT_TOKEN],
+  [GROUP_CALLERS[5], "$MEW", "$410K MC", "04/26", { ...TOKENS[5], ticker: "$MEW", name: "Cat in Dogs World", change: "-38%", mc: "$410K", price: "$0.000061", color: "linear-gradient(135deg,#D27EAF,#FF3B30)", data: [46, 44, 43, 41, 38, 39, 35, 32, 33, 29, 26, 24, 22, 19] }],
+  [GROUP_CALLERS[8], "$WEN", "$1.8M MC", "04/25", { ...TOKENS[5], ticker: "$WEN", name: "Wen", change: "-24%", mc: "$1.8M", price: "$0.00012", color: "linear-gradient(135deg,#5C6AC4,#FF3B30)", data: [58, 56, 54, 51, 49, 48, 45, 43, 41, 40, 36, 34, 32, 29] }],
+  [GROUP_CALLERS[9], "$SLERF", "$760K MC", "04/24", { ...TOKENS[5], ticker: "$SLERF", name: "Slerf", change: "-51%", mc: "$760K", price: "$0.0011", color: "linear-gradient(135deg,#E0904D,#FF3B30)", data: [72, 70, 65, 61, 58, 54, 50, 46, 41, 39, 33, 28, 24, 18] }],
+  [GROUP_CALLERS[11], "$GOAT", "$2.4M MC", "04/23", { ...TOKENS[5], ticker: "$GOAT", name: "Goatseus Maximus", change: "-19%", mc: "$2.4M", price: "$0.0038", color: "linear-gradient(135deg,#111111,#FF3B30)", data: [44, 43, 45, 42, 40, 41, 37, 36, 34, 32, 31, 28, 27, 24] }],
+  [GROUP_CALLERS[12], "$POPCAT", "$940K MC", "04/22", { ...TOKENS[0], ticker: "$POPCAT", name: "Popcat", change: "+31%", mc: "$940K", price: "$0.0024", color: "linear-gradient(135deg,#5C6AC4,#D27EAF)", data: [20, 21, 23, 22, 26, 28, 27, 30, 31, 34, 33, 36, 38, 41] }],
+  [GROUP_CALLERS[13], "$BOME", "$1.1M MC", "04/21", { ...TOKENS[5], ticker: "$BOME", name: "Book of Meme", change: "-28%", mc: "$1.1M", price: "$0.00074", color: "linear-gradient(135deg,#34C759,#FF3B30)", data: [50, 48, 46, 45, 43, 40, 42, 38, 35, 34, 31, 30, 27, 25] }],
+  [CALLERS[0], "$JUP", "$4.2M MC", "04/20", { ...TOKENS[5], ticker: "$JUP", name: "Jupiter", change: "-14%", mc: "$4.2M", price: "$0.61", color: "linear-gradient(135deg,#2DAFA0,#FF3B30)", data: [62, 60, 61, 58, 56, 54, 55, 52, 50, 49, 48, 46, 44, 42] }],
+  [CALLERS[1], "$WIF", "$2.9M MC", "04/19", { ...TOKENS[5], ticker: "$WIF", name: "Dogwifhat", change: "-33%", mc: "$2.9M", price: "$0.0049", color: "linear-gradient(135deg,#F7C76D,#FF3B30)", data: [80, 77, 73, 71, 68, 64, 61, 59, 55, 52, 49, 45, 42, 38] }],
+  [CALLERS[2], "$MOTHER", "$620K MC", "04/18", { ...TOKENS[5], ticker: "$MOTHER", name: "Mother", change: "-46%", mc: "$620K", price: "$0.00033", color: "linear-gradient(135deg,#9A5BAA,#FF3B30)", data: [66, 62, 59, 56, 52, 49, 44, 41, 37, 34, 31, 27, 24, 20] }],
+  [CALLERS[3], "$RETARDIO", "$330K MC", "04/17", { ...TOKENS[0], ticker: "$RETARDIO", name: "Retardio", change: "+18%", mc: "$330K", price: "$0.00021", color: "linear-gradient(135deg,#FFB300,#34C759)", data: [13, 14, 13, 15, 16, 15, 18, 19, 18, 20, 21, 23, 22, 25] }],
+];
+
+const TONY_CALL_HISTORY = [
+  [GROUP_CALLERS[6], "$BTC", "$101.2K support", "18:00", MARKET_TOKENS.BTC],
+  [GROUP_CALLERS[6], "$TSLA", "$184.20 price", "18:09", MARKET_TOKENS.TSLA],
+  [GROUP_CALLERS[6], "$SOL", "$164.80 price", "18:14", MARKET_TOKENS.SOL],
+  [GROUP_CALLERS[6], "$BTC", "$102.4K trigger", "Yesterday", { ...MARKET_TOKENS.BTC, change: "+0.9%" }],
+  [GROUP_CALLERS[6], "$SOL", "$171 rejection", "04/30", { ...MARKET_TOKENS.SOL, change: "-3.1%" }],
+];
+
+const LIN_CALL_HISTORY = [
+  [GROUP_CALLERS[7], "FOMC", "41¢ odds", "18:03", MARKET_TOKENS.FOMC],
+  [GROUP_CALLERS[7], "CPI", "37¢ odds", "18:10", MARKET_TOKENS.CPI],
+  [GROUP_CALLERS[7], "FOMC", "46¢ fade", "Yesterday", { ...MARKET_TOKENS.FOMC, change: "+5.2%" }],
+  [GROUP_CALLERS[7], "CPI", "33¢ entry", "04/30", { ...MARKET_TOKENS.CPI, change: "-2.1%" }],
+];
+
+const GROUP_PROFILES = {
+  cave: {
+    title: "CAVE",
+    subtitle: "3,146 members, 189 online",
+    link: "https://t.me/CAVE_JPN",
+    description: "JP TRENCHES 神風 LOW CAPS",
+    tabs: ["Callers", "Calls", "Members", "Media", "Saved"],
+    calls: GROUP_CALL_HISTORY,
+    stats: [["284", "Calls", "green"], ["71%", "Win rate", "green"], ["12.4x", "Avg return", "blue"]],
+    metrics: [["Volume", "$4.8M"], ["Callers", "43"], ["Global rank", "#14"]],
+    pnl: "+$284K",
+    chart: [10, 24, 18, 42, 38, 65, 58, 90, 84, 112, 108, 140, 135, 168],
+  },
+  tony: {
+    title: "Tony's calls",
+    subtitle: "Hyperliquid perp calls",
+    link: "https://t.me/tony_perp_calls",
+    description: "One-way BTC, SOL, and TSLA perp calls from Tony.",
+    tabs: ["Calls"],
+    calls: TONY_CALL_HISTORY,
+    stats: [["96", "Calls", "green"], ["64%", "Win rate", "green"], ["5.9x", "Avg return", "blue"]],
+    metrics: [["Volume", "$12.4M"], ["Markets", "3"], ["Global rank", "#22"]],
+    pnl: "+$221K",
+    chart: [14, 22, 19, 36, 44, 41, 62, 58, 77, 74, 91, 99, 104, 118],
+  },
+  lin: {
+    title: "Lin's insights",
+    subtitle: "Kalshi prediction market notes",
+    link: "https://t.me/lin_kalshi",
+    description: "One-way macro prediction market calls for FOMC, CPI, and headline-driven odds.",
+    tabs: ["Calls", "Media", "Saved"],
+    calls: LIN_CALL_HISTORY,
+    stats: [["72", "Calls", "green"], ["61%", "Win rate", "green"], ["3.2x", "Avg return", "blue"]],
+    metrics: [["Volume", "$3.6M"], ["Markets", "8"], ["Global rank", "#31"]],
+    pnl: "+$188K",
+    chart: [8, 18, 16, 21, 29, 27, 34, 42, 39, 47, 55, 53, 60, 68],
+  },
+};
+
+const CALLER_TRADE_HISTORY = [
+  ["$MOON", "MoonShot", "+$18,420", "+602%", TOKENS[3]],
+  ["$SHILL", "ShillDAO", "+$9,860", "+318%", TOKENS[1]],
+  ["$DEGEN", "DegenProtocol", "+$6,240", "+184%", TOKENS[0]],
+  ["$BOME", "Book of Meme", "+$4,920", "+141%", { ...TOKENS[4], ticker: "$BOME", name: "Book of Meme" }],
+  ["$PUMP", "PumpFun V2", "+$2,180", "+42%", TOKENS[2]],
+  ["$JUP", "Jupiter", "+$1,340", "+28%", { ...TOKENS[2], ticker: "$JUP", name: "Jupiter" }],
+  ["$BONK", "BonkInu", "+$860", "+18%", TOKENS[4]],
+  ["$MEW", "Cat in Dogs World", "-$420", "-9%", { ...TOKENS[5], ticker: "$MEW", name: "Cat in Dogs World" }],
+  ["$PEPE", "Pepe2.0", "-$740", "-12%", TOKENS[5]],
+  ["$GOAT", "Goatseus Maximus", "-$1,120", "-21%", { ...TOKENS[5], ticker: "$GOAT", name: "Goatseus Maximus" }],
+  ["$WIF", "Dogwifhat", "-$1,860", "-31%", { ...TOKENS[3], ticker: "$WIF", name: "Dogwifhat" }],
+  ["$SLERF", "Slerf", "-$2,430", "-44%", { ...TOKENS[5], ticker: "$SLERF", name: "Slerf" }],
+];
+
+const GROUP_LEADERBOARD = [
+  ["CAVE meme alpha group", "+$284K", "71%", "12.4x", "linear-gradient(135deg,#5C6AC4,#34C759)"],
+  ["Tony's calls", "+$221K", "68%", "5.9x", "linear-gradient(135deg,#050505,#339DFF)"],
+  ["Lin's Kalshi desk", "+$188K", "64%", "3.2x", "linear-gradient(135deg,#2DAFA0,#FFB300)"],
+  ["Daiko Factory", "+$142K", "62%", "7.8x", "#F7C76D"],
+  ["SOLTRENDING", "+$118K", "59%", "6.1x", "#2DAFA0"],
+  ["Hyperdash Flows", "+$96K", "57%", "4.4x", "#17171a"],
+  ["KOLscope", "+$82K", "55%", "3.9x", "#339DFF"],
+  ["Soylana Manlets", "+$74K", "53%", "2.8x", "#E0904D"],
+  ["CryptoKudasaiJP", "+$62K", "51%", "2.1x", "#FFB300"],
+  ["Moby Mobile Product", "+$48K", "49%", "1.8x", "#5DAB35"],
+];
+
+const CHAT_MESSAGES = {
+  cave: [
+    { type: "date", label: "Today" },
+    { type: "msg", user: "cryptokid.sol", userId: 0, text: "$DEGEN rotation cooled off. Looking for cleaner new pairs.", time: "17:58" },
+    { type: "own", text: "watching that pump address now", time: "18:02" },
+    { type: "call", caller: CALLERS[0], token: TOKENS[0], time: "18:04" },
+    { type: "msg", user: "haru", userId: 4, text: "$DITT has real holders and no ugly sniper cluster", time: "18:11" },
+  ],
+  tony: [
+    { type: "date", label: "Today" },
+    { type: "msg", user: "Tony", userId: 6, text: "BTC price is holding the 101.2K shelf. If it accepts above 102.4K, I expect a push into 104K.", time: "18:00" },
+    { type: "token", token: MARKET_TOKENS.BTC },
+    { type: "msg", user: "Tony", userId: 6, text: "TSLA perp is a momentum long only. I want continuation while Nasdaq stays bid, invalidation below the premarket low.", time: "18:09" },
+    { type: "token", token: MARKET_TOKENS.TSLA },
+    { type: "msg", user: "Tony", userId: 6, text: "SOL is the laggard. If BTC stalls, SOL probably flushes first. I only like it after funding cools down.", time: "18:14" },
+    { type: "token", token: MARKET_TOKENS.SOL },
+    { type: "msg", user: "Tony", userId: 6, text: "Priority for now: BTC long above support, TSLA scalp if equities keep squeezing, no SOL chase.", time: "18:18" },
+  ],
+  lin: [
+    { type: "date", label: "Today" },
+    { type: "msg", user: "Lin", userId: 5, text: "FOMC cut odds moved too far after the morning speaker. I am fading the spike.", time: "18:03" },
+    { type: "token", token: MARKET_TOKENS.FOMC },
+    { type: "msg", user: "Lin", userId: 5, text: "CPI under 3.0 still has room if energy keeps softening, but size it like a headline market.", time: "18:10" },
+    { type: "token", token: MARKET_TOKENS.CPI },
+    { type: "msg", user: "Lin", userId: 5, text: "Yes. Small positions. These markets reprice violently on headlines.", time: "18:17" },
+  ],
+};
+
+const NOTIFICATIONS = [
+  { title: "Trade Executed", body: "Bought 0.5 SOL of $DEGEN", time: "2m", color: "#34C759" },
+  { title: "cryptokid.sol called", body: "$SHILL - MC $180K - 3.2x potential", time: "14m", color: U[0] },
+  { title: "Price Alert Triggered", body: "$DEGEN hit +200% target", time: "1h", color: "#FFB300" },
+  { title: "Agent Auto-Traded", body: "Bought 0.3 SOL $BONK via alphahunter", time: "2h", color: U[4] },
+];
+
+const tokenBySymbol = (symbol) => {
+  const key = String(symbol || "").replace("$", "").toUpperCase();
+  return ALL_TOKENS.find((token) => token.ticker.replace("$", "").toUpperCase() === key || token.name.toUpperCase() === key) || TOKENS[0];
+};
+const tokenDescription = (token) => {
+  if (token.description) return token.description;
+  if (token.marketType === "prediction") return token.question || `${token.name} prediction market on ${token.market}.`;
+  if (token.name.includes("Perp")) return `${token.name} is tracked from Hyperliquid call flow with live perp price, volume, and liquidation context.`;
+  return `${token.name} is moving through Daikogram calls with live market, liquidity, and holder activity.`;
+};
+const callerColor = (id) => U[id % U.length];
+const tokenInitial = (token) => token.ticker.replace("$", "").slice(0, 1);
+const tokenDisplay = (token) => token.marketType === "prediction" ? token.name : token.ticker;
+
+function Icon({ name, size = 24 }) {
+  const paths = {
+    chats: "M4 5.5C4 4.7 4.7 4 5.5 4h13c.8 0 1.5.7 1.5 1.5v9c0 .8-.7 1.5-1.5 1.5H8l-4 4v-14.5z",
+    calls: "M6.6 10.8c1.4 2.8 3.8 5.2 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.4 0 .8-.2 1l-2.3 2.2z",
+    home: "M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-8.5z",
+    settings: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm8 4a7.9 7.9 0 0 0-.1-1.2l2-1.5-2-3.4-2.4 1a8 8 0 0 0-2-1.2L15.2 3H8.8l-.4 2.7a8 8 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.5A7.9 7.9 0 0 0 4 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.4-1a8 8 0 0 0 2 1.2l.4 2.7h6.4l.4-2.7a8 8 0 0 0 2-1.2l2.4 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z",
+    search: "M11 19a8 8 0 1 1 5.7-2.3L21 21",
+    bell: "M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0",
+    edit: "M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z",
+    back: "M15 18l-6-6 6-6",
+    history: "M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 7v5l3 2",
+    star: "m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3z",
+    share: "M12 3v12M7 8l5-5 5 5M5 13v6h14v-6",
+    x: "M18 6 6 18M6 6l12 12",
+    chevronDown: "m6 9 6 6 6-6",
+    plus: "M12 5v14M5 12h14",
+    mic: "M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM19 10v2a7 7 0 0 1-14 0v-2M12 19v3",
+    paperclip: "M21.4 11.1 12.2 20.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 1 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5",
+    trade: "M7 7h11l-3-3M17 17H6l3 3M18 7 6 0M6 17H0",
+    wallet: "M3 7h17a1 1 0 0 1 1 1v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7zm0 0V6a2 2 0 0 1 2-2h13M17 13h.01",
+    user: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-8 9c0-4 3.6-7 8-7s8 3 8 7",
+    info: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 10v7M12 7h.01",
+    grid: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2M20 14h-2M14 20h6M20 20v-6",
+    bookmark: "M6 4h12v17l-6-4-6 4V4z",
+    devices: "M5 5h8v14H5zM15 8h4v11h-4z",
+    folder: "M3 7h7l2 2h9v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z",
+    lock: "M7 11V8a5 5 0 0 1 10 0v3M6 11h12v10H6z",
+    camera: "M4 8h4l2-3h4l2 3h4v11H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
+  };
   return (
-    <svg width={w} height={h} style={{ display: "block", width: "100%" }}>
-      {[0.25,0.5,0.75].map(p => <line key={p} x1={0} y1={h*p} x2={w} y2={h*p} stroke="#E5E5EA" strokeWidth="0.5" strokeDasharray="4,4" />)}
-      {candles.map((c, i) => {
-        const x = i * (cw + gap) + gap, green = c.c >= c.o, color = green ? GREEN : RED;
-        const bT = s(Math.max(c.o, c.c)), bB = s(Math.min(c.o, c.c));
-        return <g key={i}><line x1={x+cw/2} y1={s(c.h)} x2={x+cw/2} y2={s(c.l)} stroke={color} strokeWidth="1"/><rect x={x} y={bT} width={cw} height={Math.max(bB-bT,1)} fill={green?color:"none"} stroke={color} strokeWidth="1" rx="1"/></g>;
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d={paths[name] || paths.home} />
+    </svg>
+  );
+}
+
+function Avatar({ label, color, size = "md", image }) {
+  return (
+    <span className={`avatar avatar-${size}`} style={{ background: color }}>
+      {image ? <img src={image} alt="" className="avatar-image" /> : label}
+    </span>
+  );
+}
+
+function AvatarGroup({ count, max = 3, size = 18 }) {
+  const avatars = Array.from({ length: Math.min(count, max) }, (_, i) => ({ label: CALLERS[i % CALLERS.length].name[0].toUpperCase(), color: CALLERS[i % CALLERS.length].color }));
+  return (
+    <span className="avatar-group">
+      <span className="avatar-stack" aria-hidden="true">
+        {avatars.map((avatar, index) => (
+          <span key={`${avatar.label}-${index}`} className="avatar-mini" style={{ width: size, height: size, background: avatar.color, marginLeft: index ? -5 : 0, fontSize: Math.max(8, size * 0.48) }}>
+            {avatar.label}
+          </span>
+        ))}
+      </span>
+      <span className="mono avatar-count">+{count}</span>
+    </span>
+  );
+}
+
+function Sparkline({ data, color, height = 58, marker }) {
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const width = 180;
+  const points = data.map((value, index) => `${(index / (data.length - 1)) * width},${height - ((value - min) / range) * (height - 6) - 3}`);
+  const pointPairs = points.map((point) => point.split(",").map(Number));
+  const markerIndex = marker ? Math.min(Math.max(marker.index ?? data.length - 1, 0), data.length - 1) : null;
+  const markerPoint = marker ? pointPairs[markerIndex] : null;
+  const markerX = markerPoint ? Math.max(0, Math.min(width, markerPoint[0] + (marker.offsetX || 0))) : null;
+  const markerY = markerPoint ? (() => {
+    const nextIndex = pointPairs.findIndex(([x]) => x >= markerX);
+    if (nextIndex <= 0) return pointPairs[0][1];
+    const [x1, y1] = pointPairs[nextIndex - 1];
+    const [x2, y2] = pointPairs[nextIndex];
+    const t = (markerX - x1) / (x2 - x1 || 1);
+    return y1 + (y2 - y1) * t;
+  })() : null;
+  const fill = `${points.join(" ")} ${width},${height} 0,${height}`;
+  const id = `spark-${data.join("-").replace(/\W/g, "")}`;
+  return (
+    <svg className="spark" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Sparkline">
+      <defs>
+        <linearGradient id={id} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <polygon points={fill} fill={`url(#${id})`} />
+      <polyline points={points.join(" ")} fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      {markerPoint ? (
+        <g>
+          <circle cx={markerX} cy={markerY} r="4.2" fill="#FF3B30" stroke="#fff" strokeWidth="1.4" />
+          {marker.label ? <text x={Math.min(markerX + 7, width - 52)} y={Math.max(markerY - 6, 10)} className="spark-marker-label">{marker.label}</text> : null}
+        </g>
+      ) : null}
+    </svg>
+  );
+}
+
+function LiveSparkline({ data, color, height = 44, marker }) {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((value) => value + 1), 1600);
+    return () => window.clearInterval(id);
+  }, []);
+  const liveData = useMemo(() => data.map((value, index) => {
+    const phase = tick % 24;
+    const wave = Math.sin((phase + index) * 0.42) * 3.1;
+    const drift = phase * 0.35;
+    const pulse = index === data.length - 1 ? (tick % 2 ? 3.2 : -1.4) : 0;
+    const trend = index > data.length - 4 ? drift : 0;
+    return Math.max(1, value + wave + pulse + trend);
+  }), [data, tick]);
+  const liveMarker = marker ? { ...marker, offsetX: -((tick % 24) * 1.8) } : null;
+  return <Sparkline data={liveData} color={color} height={height} marker={liveMarker} />;
+}
+
+function LivePrice({ price }) {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((value) => value + 1), 1500);
+    return () => window.clearInterval(id);
+  }, []);
+  const live = useMemo(() => {
+    const raw = String(price);
+    const numeric = Number(raw.replace(/[$,¢]/g, ""));
+    if (!Number.isFinite(numeric)) return { text: raw, direction: "up" };
+    const priceSteps = [0.0024, -0.0016, 0.0031, 0.0012, -0.0022, 0.004, -0.0009, 0.0028, -0.003, 0.0017, 0.0035, -0.0011, 0.0046, -0.0025, 0.0021, 0.0008];
+    const visibleSteps = [2, -1, 3, 1, -2, 4, -1, 2, -3, 1, 3, -1, 4, -2, 2, 1];
+    const move = priceSteps[tick % priceSteps.length];
+    const decimals = raw.includes(".") ? Math.min(raw.split(".")[1].replace(/[^0-9]/g, "").length, 6) : 0;
+    const displayUnit = raw.includes("¢") ? 1 : 10 ** -decimals;
+    const visibleMove = visibleSteps[tick % visibleSteps.length] * displayUnit;
+    const marketMove = numeric * move;
+    const next = Math.max(0, numeric + (Math.abs(marketMove) > Math.abs(visibleMove) ? marketMove : visibleMove));
+    const direction = next >= numeric ? "up" : "down";
+    const text = raw.includes("¢") ? `${next.toFixed(0)}¢` : `$${next.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
+    return { text, direction };
+  }, [price, tick]);
+  return <b className={`mono live-price ${live.direction}`}>{live.text}</b>;
+}
+
+function Candles() {
+  const candles = [
+    { o: 40, h: 55, l: 35, c: 50 }, { o: 50, h: 60, l: 45, c: 44 }, { o: 44, h: 52, l: 40, c: 48 },
+    { o: 48, h: 58, l: 46, c: 56 }, { o: 56, h: 62, l: 50, c: 52 }, { o: 52, h: 54, l: 42, c: 45 },
+    { o: 45, h: 50, l: 38, c: 47 }, { o: 47, h: 55, l: 44, c: 53 }, { o: 53, h: 60, l: 48, c: 58 },
+    { o: 58, h: 65, l: 55, c: 62 }, { o: 62, h: 68, l: 58, c: 60 }, { o: 60, h: 63, l: 52, c: 54 },
+    { o: 54, h: 59, l: 50, c: 57 }, { o: 57, h: 64, l: 53, c: 61 }, { o: 61, h: 66, l: 56, c: 58 },
+  ];
+  const height = 160;
+  const width = 320;
+  const candleWidth = 10;
+  const gap = 8;
+  const values = candles.flatMap((candle) => [candle.h, candle.l]);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const scale = (value) => height - ((value - min) / (max - min)) * (height - 18) - 9;
+  return (
+    <svg className="candles" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Candlestick chart">
+      {[0.25, 0.5, 0.75].map((p) => <line key={p} x1="0" y1={height * p} x2={width} y2={height * p} className="candle-grid" />)}
+      {candles.map((candle, index) => {
+        const x = index * (candleWidth + gap) + 12;
+        const green = candle.c >= candle.o;
+        const color = green ? "#34C759" : "#FF3B30";
+        const top = scale(Math.max(candle.o, candle.c));
+        const bottom = scale(Math.min(candle.o, candle.c));
+        return (
+          <g key={index}>
+            <line x1={x + candleWidth / 2} y1={scale(candle.h)} x2={x + candleWidth / 2} y2={scale(candle.l)} stroke={color} strokeWidth="1" />
+            <rect x={x} y={top} width={candleWidth} height={Math.max(bottom - top, 1)} rx="1" fill={color} stroke={color} />
+          </g>
+        );
       })}
     </svg>
   );
-};
+}
 
-const WinLossBar = ({ wins, losses }) => {
-  const wp = (wins / (wins + losses)) * 100;
-  return <div style={{ display: "flex", height: 6, borderRadius: 3, overflow: "hidden", background: "#eee" }}><div style={{ width: `${wp}%`, background: GREEN }} /><div style={{ flex: 1, background: RED }} /></div>;
-};
-
-const Toast = ({ message, visible }) => (
-  <div style={{ position: "absolute", bottom: 70, left: "50%", transform: `translateX(-50%) translateY(${visible ? 0 : 20}px)`, background: visible ? "#2C2C2E" : "#000c", color: "#fff", padding: "10px 22px", borderRadius: 14, fontSize: 14, fontWeight: 500, opacity: visible ? 1 : 0, transition: "all 0.3s", zIndex: 100, whiteSpace: "nowrap", pointerEvents: "none", display: "flex", alignItems: "center", gap: 8 }}>
-    {message}
-  </div>
-);
-
-const Toggle = ({ on, onChange }) => (
-  <div onClick={onChange} style={{ width: 44, height: 26, borderRadius: 13, background: on ? GREEN : "#E5E5EA", position: "relative", cursor: "pointer", transition: "background 0.2s", flexShrink: 0 }}>
-    <div style={{ position: "absolute", top: 3, left: on ? 21 : 3, width: 20, height: 20, borderRadius: 10, background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.3)", transition: "left 0.2s" }} />
-  </div>
-);
-
-const CALLERS = [
-  { name: "cryptokid.sol", wr: "74%", avg: "8.4x", pnl: "+$42.6K", calls: 127, wins: 94, losses: 33, c: "#D84315", followers: "2.1K" },
-  { name: "alphahunter", wr: "81%", avg: "12.1x", pnl: "+$96.2K", calls: 89, wins: 72, losses: 17, c: "#7C4DFF", followers: "4.8K" },
-  { name: "whalemaster", wr: "68%", avg: "4.2x", pnl: "+$18.9K", calls: 203, wins: 138, losses: 65, c: "#00838F", followers: "1.3K" },
-  { name: "degenking", wr: "62%", avg: "6.7x", pnl: "+$11.4K", calls: 56, wins: 35, losses: 21, c: "#FF6D00", followers: "890" },
-];
-
-const PAST_CALLS = [
-  { token: "$DEGEN", result: "+412%", win: true, time: "2h ago", c: "#00C853" },
-  { token: "$BONK", result: "+89%", win: true, time: "1d ago", c: "#00ACC1" },
-  { token: "$RUGG", result: "-100%", win: false, time: "2d ago", c: RED },
-  { token: "$MOON", result: "+1,240%", win: true, time: "3d ago", c: "#FF9500" },
-];
-
-const PERP_POSITIONS = [
-  { pair: "SOL-PERP", side: "LONG", size: "5 SOL", entry: "$132.40", mark: "$137.59", pnl: "+$26.00", pnlPct: "+3.9%", lev: "5x", liq: "$105.90", win: true },
-  { pair: "ETH-PERP", side: "SHORT", size: "0.3 ETH", entry: "$3,480", mark: "$3,210", pnl: "+$81.00", pnlPct: "+7.8%", lev: "3x", liq: "$4,100", win: true },
-  { pair: "BTC-PERP", side: "LONG", size: "0.01 BTC", entry: "$68,200", mark: "$67,400", pnl: "-$8.00", pnlPct: "-1.2%", lev: "2x", liq: "$51,000", win: false },
-];
-
-const NOTIFICATIONS = [
-  { type: "trade", icon: "⚡", title: "Trade Executed", msg: "Bought 0.5 SOL of $DEGEN", time: "2 min ago", color: GREEN, read: false },
-  { type: "caller", icon: "🔥", title: "cryptokid.sol called", msg: "$SHILL · MC $180K · 3.2x potential", time: "14 min ago", color: "#D84315", read: false },
-  { type: "alert", icon: "📈", title: "Price Alert Triggered", msg: "$DEGEN hit +200% target", time: "1h ago", color: ORANGE, read: false },
-  { type: "agent", icon: "🤖", title: "Agent Auto-Traded", msg: "Bought 0.3 SOL $BONK via alphahunter signal", time: "2h ago", color: PURPLE, read: true },
-  { type: "caller", icon: "🐋", title: "whalemaster called", msg: "$PUMP · MC $1.2M · new ATH incoming", time: "3h ago", color: "#00838F", read: true },
-  { type: "alert", icon: "⚠️", title: "Liquidation Warning", msg: "BTC-PERP position near liquidation ($67,400)", time: "5h ago", color: RED, read: true },
-  { type: "trade", icon: "✅", title: "Trade Completed", msg: "Sold $RUGG → -100% loss. RIP 🫡", time: "2d ago", color: "#8E8E93", read: true },
-];
-
-const TRENDING_TOKENS = [
-  { token: "$DEGEN", name: "DegenProtocol", change: "+184%", mc: "$420K", vol: "$1.2M", c: "#00C853", hot: true, calls: 15, msgId: "call1" },
-  { token: "$SHILL", name: "ShillDAO", change: "+320%", mc: "$180K", vol: "$890K", c: PURPLE, hot: true, calls: 23, msgId: "call2" },
-  { token: "$PUMP", name: "PumpFun", change: "+42%", mc: "$1.2M", vol: "$4.5M", c: ORANGE, hot: false, calls: 8, msgId: "call3" },
-  { token: "$MOON", name: "MoonShot", change: "+1,240%", mc: "$45K", vol: "$220K", c: "#FFD700", hot: true, calls: 31 },
-  { token: "$BONK", name: "BonkInu", change: "+89%", mc: "$8.4M", vol: "$32M", c: "#FF6D00", hot: false, calls: 6 },
-  { token: "$PEPE", name: "Pepe2.0", change: "-12%", mc: "$2.1M", vol: "$890K", c: RED, hot: false, calls: 2 },
-];
-
-export default function App() {
-  const [tab, setTab] = useState("chats");  // contacts|calls|chats|home|settings
-  const [chatOpen, setChatOpen] = useState(null);
-  const [profileOpen, setProfileOpen] = useState(null);
-  const [tradeToken, setTradeToken] = useState(null);
-  const [callerIdx, setCallerIdx] = useState(-1);
-  const [portfolioOpen, setPortfolioOpen] = useState(false);
-  const [perpOpen, setPerpOpen] = useState(false);
-  const [agentOpen, setAgentOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
-  const [discoveryOpen, setDiscoveryOpen] = useState(false);
-  const [leaderboardOpen, setLeaderboardOpen] = useState(false);
-  const [tradeMode, setTradeMode] = useState("buy");
-  const [perpMode, setPerpMode] = useState("long");
-  const [selAmt, setSelAmt] = useState("0.1");
-  const [perpLev, setPerpLev] = useState(5);
-  const [perpSize, setPerpSize] = useState("1");
-  const [toast, setToast] = useState({ message: "", visible: false });
-  const [alertedCallers, setAlertedCallers] = useState({});
-  const [copyTradeCallers, setCopyTradeCallers] = useState({});
-  const [draftMessage, setDraftMessage] = useState("2R2F91ewRgZ6R33TcCDebK6Lh6pVTzAKgiURcpgVpump");
-  const [chatMessages, setChatMessages] = useState(() => [
-    { type: "date", label: "Today" },
-    { type: "msg", avatar: "S", avatarBg: "#E3A04F", name: "solhunter.sol", nameColor: "#C88A30", time: "13:02", text: "GM everyone 🫡 Market looks good today, let's go hard" },
-    { type: "msg", avatar: "R", avatarBg: "#00838F", name: "ren", nameColor: "#00695C", time: "13:05", text: "BTC dominance is dropping, alt season might be coming 👀" },
-    { type: "own", text: "SOL is doing well too", time: "13:06" },
-    { type: "call", msgId: "call1", callerName: "cryptokid.sol", callerColor: "#D84315", callerIdxVal: 0, badge: "TOP 10% CALLER", winRate: "74%", token: "$DEGEN", tokenSub: "DegenProtocol", tokenPrice: "$0.0042", tokenChange: "+184%", tokenBg: "linear-gradient(135deg,#00C853,#00ACC1)", tokenLetter: "D", mc: "$420K", vol: "$1.2M", ath: "$0.0089", liq: "$85K", tags: [["Bundle 2%","good"],["Insider 0.5%","good"],["Sniper 8%","warn"]], links: [["🔗 Twitter",true],["Telegram",false],["Website",false]], sparkData: [12,15,14,18,22,20,28,35,32,38,42,45,40,48,52,55,50,58,62], time: "14:30" },
-    { type: "msg", avatar: "P", avatarBg: "#0277BD", name: "pepelord", nameColor: "#0277BD", badge: "WHALE", time: "14:31", replyTo: { name: "cryptokid.sol", text: "$DEGEN call", color: "#D84315" }, text: "aping 2 SOL 🫡" },
-    { type: "own", text: "Chart looks good. Put in 0.5 SOL 🔥", time: "14:32" },
-    { type: "msg", avatar: "K", avatarBg: "#7B1FA2", name: "Kate🚀", nameColor: "#7B1FA2", time: "14:34", text: "Bought the dip, just watching~ Went in with DP" },
-    { type: "msg", avatar: "S", avatarBg: "#E3A04F", name: "solhunter.sol", nameColor: "#C88A30", time: "14:38", text: "$DEGEN is already over +250%, cryptokid is literally a god" },
-    { type: "own", text: "TP set at 50% 👍", time: "14:40" },
-    { type: "msg", avatar: "R", avatarBg: "#00838F", name: "ren", nameColor: "#00695C", time: "14:44", text: "If the next call comes in with this momentum it's gonna be insane" },
-    { type: "call", msgId: "call2", callerName: "alphahunter", callerColor: "#7C4DFF", callerIdxVal: 1, badge: "TOP 10% CALLER", winRate: "81%", token: "$SHILL", tokenSub: "ShillDAO", tokenPrice: "$0.00018", tokenChange: "+320%", tokenBg: "linear-gradient(135deg,#7C4DFF,#E040FB)", tokenLetter: "S", mc: "$180K", vol: "$890K", ath: "$0.00042", liq: "$62K", tags: [["Bundle 1%","good"],["Dev doxxed","good"],["Sniper 12%","warn"]], links: [["🔗 Twitter",true],["Telegram",true],["Website",false]], sparkData: [5,8,7,14,20,18,30,42,38,55,62,70,65,82,95,110,105,128,142], time: "16:12" },
-    { type: "msg", avatar: "P", avatarBg: "#0277BD", name: "pepelord", nameColor: "#0277BD", badge: "WHALE", time: "16:13", text: "alphahunter calling again 🔥🔥🔥 going in 5 SOL" },
-    { type: "msg", avatar: "K", avatarBg: "#7B1FA2", name: "Kate🚀", nameColor: "#7B1FA2", time: "16:14", text: "Was watching $SHILL too! MC is so small it's scary… but going in 1 SOL" },
-    { type: "own", text: "alphahunter WR 81%… should I ape", time: "16:15" },
-    { type: "msg", avatar: "S", avatarBg: "#E3A04F", name: "solhunter.sol", nameColor: "#C88A30", time: "16:20", text: "Took out half when $SHILL 2x'd 💰 letting the rest ride" },
-    { type: "own", text: "Smart! I took back 0.3 SOL too", time: "16:22" },
-    { type: "msg", avatar: "R", avatarBg: "#00838F", name: "ren", nameColor: "#00695C", time: "16:28", text: "Volume is picking up, could hit +500% Can't look away" },
-    { type: "msg", avatar: "K", avatarBg: "#7B1FA2", name: "Kate🚀", nameColor: "#7B1FA2", time: "16:35", text: "This is starting to feel like the $CAVE gram portfolio lol 😂" },
-    { type: "own", text: "For real 😂 can't wait for the next call", time: "16:36" },
-    { type: "call", msgId: "call3", callerName: "whalemaster", callerColor: "#00838F", callerIdxVal: 2, badge: "TOP 10% CALLER", winRate: "68%", token: "$PUMP", tokenSub: "PumpFun V2", tokenPrice: "$0.0012", tokenChange: "+42%", tokenBg: "linear-gradient(135deg,#FF6D00,#FFC400)", tokenLetter: "P", mc: "$1.2M", vol: "$4.5M", ath: "$0.0028", liq: "$210K", tags: [["Bundle 3%","good"],["Insider 1.2%","good"],["Sniper 5%","good"]], links: [["🔗 Twitter",true],["Telegram",true],["Website",true]], sparkData: [30,32,29,35,38,42,40,45,50,48,55,62,60,68,72,70,78,82,88], time: "19:45" },
-    { type: "msg", avatar: "P", avatarBg: "#0277BD", name: "pepelord", nameColor: "#0277BD", badge: "WHALE", time: "19:46", text: "$PUMP looks solid, MC is bigger so easier to enter with lower risk" },
-    { type: "msg", avatar: "S", avatarBg: "#E3A04F", name: "solhunter.sol", nameColor: "#C88A30", time: "19:47", text: "whalemaster always plays the larger MC ones steadily, love it" },
-    { type: "own", text: "Went in 2 SOL! Liquidity over $200K so feeling safe", time: "19:48" },
-    { type: "msg", avatar: "K", avatarBg: "#7B1FA2", name: "Kate🚀", nameColor: "#7B1FA2", time: "19:52", text: "If all 3 calls today finish green it's legendary 🙏" },
-    { type: "msg", avatar: "R", avatarBg: "#00838F", name: "ren", nameColor: "#00695C", time: "20:01", text: "$PUMP just hit +80%! whalemaster never misses 🐋" },
-    { type: "own", text: "CAVE callers are the best fr 🔥", time: "20:03" },
-    { type: "msg", avatar: "S", avatarBg: "#E3A04F", name: "solhunter.sol", nameColor: "#C88A30", time: "20:10", text: "Did anyone's total CAVE pf gains cross +$4200 today? lol" },
-    { type: "msg", avatar: "P", avatarBg: "#0277BD", name: "pepelord", nameColor: "#0277BD", badge: "WHALE", time: "20:12", text: "+$9K secured 🤝" },
-    { type: "own", text: "lol typical whale 😂", time: "20:13" },
-  ]);
-  const handleSend = useCallback(() => {
-    const text = draftMessage.trim();
-    if (!text) return;
-    const id = "user-" + Date.now();
-    const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    setChatMessages(prev => [...prev, { type: "ownPending", id, text, time }]);
-    setDraftMessage("");
-    if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(text)) {
-      setTimeout(() => {
-        setChatMessages(prev => prev.map(m =>
-          m.id === id
-            ? {
-                type: "ownCall", id, time,
-                token: "$BUDDY", tokenSub: "Best Buddy", tokenPrice: "$0.0031",
-                tokenChange: "+47%", tokenBg: "linear-gradient(135deg,#FF6D00,#FFC400)",
-                tokenLetter: "B",
-                mc: "$310K", vol: "$980K", ath: "$0.0058", liq: "$72K",
-                tags: [["Bundle 1.5%","good"],["Insider 0.4%","good"],["Sniper 6%","warn"]],
-                links: [["🔗 Twitter",true],["Telegram",true],["Website",false]],
-                sparkData: [10,12,11,15,18,17,22,28,27,32,38,40,38,44,50,55,52,60,65],
-                ca: text,
-              }
-            : m
-        ));
-      }, 600);
-    }
-  }, [draftMessage]);
-  const [groupTab, setGroupTab] = useState("Top Callers");
-  const [chartTf, setChartTf] = useState("4H");
-  const [perpPair, setPerpPair] = useState("SOL-PERP");
-  const [perpTab, setPerpTab] = useState("positions");
-  const [agentEnabled, setAgentEnabled] = useState(true);
-  const [agentSettings, setAgentSettings] = useState({
-    autoTrade: true, maxPerCall: "0.5", followCallers: true, perpEnabled: false,
-    minWR: "65", maxSlippage: "15", tpPct: "50", slPct: "30",
-  });
-  const [discoveryTab, setDiscoveryTab] = useState("trending");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [notifFilter, setNotifFilter] = useState("all");
-  const [scrollToMsg, setScrollToMsg] = useState(null); // 'call1'|'call2'|'call3'
-  const [theme, setTheme] = useState("light"); // "light" | "dark"
-  const [authenticated, setAuthenticated] = useState(false);
-  const [authStep, setAuthStep] = useState("phone"); // "phone" | "code"
-  const [authPhone, setAuthPhone] = useState("");
-
-  const showToast = (m) => { setToast({ message: m, visible: true }); setTimeout(() => setToast(t => ({ ...t, visible: false })), 2200); };
-
-  // ─── View Transition navigator ────────────────────────────────
-  const navigate = useCallback((fn, direction = "push") => {
-    if (!document.startViewTransition) {
-      fn();
-      return;
-    }
-    document.documentElement.dataset.vt = direction;
-    const transition = document.startViewTransition(() => {
-      fn();
-    });
-    transition.finished.finally(() => {
-      delete document.documentElement.dataset.vt;
-    });
-  }, []);
-
-  const goChat = (name) => navigate(() => { setChatOpen(name); setProfileOpen(null); setTradeToken(null); setCallerIdx(-1); setPortfolioOpen(false); setPerpOpen(false); setAgentOpen(false); setNotifOpen(false); setDiscoveryOpen(false); setLeaderboardOpen(false); });
-  const goToCall = (msgId) => navigate(() => {
-    setChatOpen("CAVE Alpha Group");
-    setProfileOpen(null); setTradeToken(null); setCallerIdx(-1);
-    setPortfolioOpen(false); setPerpOpen(false); setAgentOpen(false);
-    setNotifOpen(false); setDiscoveryOpen(false); setLeaderboardOpen(false);
-    setScrollToMsg(msgId);
-  });
-
-  const goBack = () => {
-    if (leaderboardOpen) { navigate(() => setLeaderboardOpen(false), "pop"); return; }
-    if (discoveryOpen) { navigate(() => setDiscoveryOpen(false), "pop"); return; }
-    if (notifOpen) { navigate(() => setNotifOpen(false), "pop"); return; }
-    if (agentOpen) { navigate(() => setAgentOpen(false), "pop"); return; }
-    if (perpOpen) { navigate(() => setPerpOpen(false), "pop"); return; }
-    if (portfolioOpen) { navigate(() => setPortfolioOpen(false), "pop"); return; }
-    if (callerIdx >= 0) { navigate(() => setCallerIdx(-1), "pop"); return; }
-    if (tradeToken) { navigate(() => setTradeToken(null), "pop"); return; }
-    if (profileOpen) { navigate(() => setProfileOpen(null), "pop"); return; }
-    navigate(() => setChatOpen(null), "pop");
-  };
-  const toggleAlerts = (idx) => {
-    setAlertedCallers(f => ({ ...f, [idx]: !f[idx] }));
-    showToast(alertedCallers[idx] ? "Alerts off" : "🔔 Alerts on");
-  };
-  const toggleCopyTrade = (idx) => {
-    setCopyTradeCallers(f => ({ ...f, [idx]: !f[idx] }));
-    showToast(copyTradeCallers[idx] ? "Copy Trade stopped" : "✅ Copy Trade started");
-  };
-
-  // ─── Theme helpers ───
-  const isDark = theme === "dark";
-  const T = {
-    bg: isDark ? "#000" : "#fff",
-    bg2: isDark ? "#1C1C1E" : "#F2F2F7",
-    bg3: isDark ? "#2C2C2E" : "#EFEFF4",
-    card: isDark ? "#1C1C1E" : "#fff",
-    border: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
-    text: isDark ? "#fff" : "#000",
-    text2: isDark ? "#8E8E93" : "#8E8E93",
-    text3: isDark ? "#636366" : "#C7C7CC",
-    tg: TG,
-    navBg: isDark ? "#1C1C1E" : "#F7F7F7",
-    navBorder: isDark ? "rgba(255,255,255,0.1)" : "#B5B5B5",
-    headerBg: isDark ? "#1C1C1E" : "#fff",
-    chatBg: isDark ? "#0D1117" : "#C8E0D0",
-    msgBg: isDark ? "#2C2C2E" : "#fff",
-    msgOut: isDark ? "#2B5278" : "#EEFFDE",
-    searchBg: isDark ? "#2C2C2E" : "#E8E8ED",
-    sectionBg: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
-  };
-
-  // ─── Status Bar (PWA: safe-area top spacer only) ───
-  const StatusBar = () => (
-    <div style={{ background: isDark ? "#000" : "#fff", height: "env(safe-area-inset-top, 44px)", flexShrink: 0 }} />
+function StatusBar() {
+  return (
+    <div className="status-bar">
+      <div className="status-time mono">18:36</div>
+      <div className="dynamic-island"><span>D</span><b>DAIKOGRAM</b></div>
+      <div className="status-icons">
+        <span className="signal"><i /><i /><i /><i /></span>
+        <span className="wifi" />
+        <span className="battery"><span /></span>
+      </div>
+    </div>
   );
+}
 
-  // ─── Tab Bar ───
-  const TabBar = () => {
-    const tabs = [
-      { id: "contacts", label: "Contacts", d: "M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" },
-      { id: "calls", label: "Calls", d: "M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" },
-      { id: "chats", label: "Chats", badge: 971, d: "M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" },
-      { id: "home", label: "Home", d: "M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" },
-      { id: "settings", label: "Settings", alert: true, d: "M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81a.49.49 0 00-.48-.41h-3.84a.49.49 0 00-.48.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 00-.59.22L2.71 8.87a.49.49 0 00.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.03-1.58z" },
-    ];
-    const notifBadge = NOTIFICATIONS.filter(n => !n.read).length;
-    // Liquid glass style — iOS 26 frosted bar
-    const glassBase = {
-      backdropFilter: "blur(40px) saturate(200%) brightness(1.05)",
-      WebkitBackdropFilter: "blur(40px) saturate(200%) brightness(1.05)",
-    };
-    const darkGlass = {
-      ...glassBase,
-      background: "rgba(28,28,30,0.78)",
-      borderTop: "0.5px solid rgba(255,255,255,0.12)",
-      boxShadow: "0 -1px 0 rgba(255,255,255,0.06), 0 -8px 32px rgba(0,0,0,0.5)",
-    };
-    const lightGlass = {
-      ...glassBase,
-      background: "rgba(249,249,249,0.82)",
-      borderTop: "0.5px solid rgba(255,255,255,0.9)",
-      boxShadow: "0 -1px 0 rgba(0,0,0,0.08), 0 -8px 24px rgba(0,0,0,0.06)",
-    };
-    const glassStyle = isDark ? darkGlass : lightGlass;
-    const inactiveColor = isDark ? "rgba(235,235,245,0.50)" : "rgba(60,60,67,0.50)";
+function HomeHeader({ title = "Daikogram", onDiscover, onNotify, onBack }) {
+  return (
+    <header className="home-header">
+      <button className="pill nav-pill text-pill" onClick={onBack || onDiscover} type="button">{onBack ? "Back" : "Edit"}</button>
+      <div className="center-title">
+        <span className="app-logo">D</span>
+        <span>{title}</span>
+      </div>
+      <button className="pill nav-pill icon-pill" onClick={onNotify || onDiscover} type="button" aria-label={onNotify ? "Notifications" : "Search"}>
+        <Icon name={onNotify ? "bell" : "search"} size={21} />
+      </button>
+    </header>
+  );
+}
 
+function TelegramHeader({ title, leftLabel = "Edit", rightIcon = "plus", onLeft, onRight, children }) {
+  return (
+    <header className="telegram-header">
+      <button className="pill nav-pill text-pill" type="button" onClick={onLeft}>{leftLabel}</button>
+      <div className="telegram-title">{children || title}</div>
+      <button className="pill nav-pill icon-pill" type="button" onClick={onRight} aria-label={rightIcon}>
+        <Icon name={rightIcon} size={24} />
+      </button>
+    </header>
+  );
+}
+
+function HeaderSegment({ value, onChange, items }) {
+  return (
+    <div className="header-segment">
+      {items.map((item) => (
+        <button key={item} type="button" className={value === item ? "active" : ""} onClick={() => onChange(item)}>
+          {item}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ChatHeader({ title, meta, color, onBack, onProfile }) {
+  return (
+    <header className="chat-header">
+      <button className="pill chat-back" onClick={onBack} type="button" aria-label="Back">
+        <Icon name="back" size={21} />
+        <span className="unread-badge">9</span>
+      </button>
+      <button className="pill chat-title-pill" onClick={onProfile} type="button">
+        <span>{title}</span>
+        {meta ? <small>{meta}</small> : null}
+      </button>
+      <button className="avatar-button" onClick={onProfile} type="button" aria-label="Open profile">
+        <Avatar label={title[0]} color={color} size="sm" />
+      </button>
+    </header>
+  );
+}
+
+function SearchField({ value, onChange, placeholder = "Search" }) {
+  return (
+    <label className="search-field">
+      <Icon name="search" size={15} />
+      <input value={value || ""} onChange={(event) => onChange?.(event.target.value)} placeholder={placeholder} />
+    </label>
+  );
+}
+
+function SectionLabel({ children }) {
+  return <div className="section-label">{children}</div>;
+}
+
+function Card({ children, className = "" }) {
+  return <div className={`tg-card ${className}`}>{children}</div>;
+}
+
+function Row({ children, onClick, className = "" }) {
+  return (
+    <button className={`tg-row ${className}`} onClick={onClick} type="button">
+      {children}
+    </button>
+  );
+}
+
+function FilterChips({ items, active, onChange }) {
+  return (
+    <div className="chip-row">
+      {items.map((item) => (
+        <button key={item} type="button" className={`filter-chip ${active === item ? "active" : ""}`} onClick={() => onChange(item)}>
+          {item}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function PortfolioHero({ onTrade }) {
+  return (
+    <Card className="portfolio-hero">
+      <div className="hero-tag">Daikogram Wallet <span>Hidden from contacts</span></div>
+      <div className="balance mono">$12,847<span>.50</span></div>
+      <div className="delta-pill mono">▲ +$612.40 - +12.4%</div>
+      <Sparkline data={[38, 40, 39, 43, 49, 47, 55, 61, 59, 67, 75, 83, 91, 89, 98, 105]} color="#34C759" height={58} />
+      <div className="action-row">
+        <button type="button" className="action-button primary" onClick={onTrade}>Buy</button>
+        <button type="button" className="action-button">Send</button>
+        <button type="button" className="action-button">Swap</button>
+      </div>
+    </Card>
+  );
+}
+
+function TrendRow({ token, onOpen, onBuy }) {
+  const positive = token.change.startsWith("+");
+  return (
+    <div className="trend-row">
+      <button className="trend-main" type="button" onClick={onOpen}>
+        <Avatar label={token.ticker[1]} color={token.color} size="md" />
+        <span className="trend-copy">
+          <span className="trend-title">
+            <b>{token.ticker}</b>
+            <em className={`mono ${positive ? "green" : "red"}`}>{token.change}</em>
+          </span>
+          <span className="trend-subline">
+            <span>MC <span className="mono">{token.mc}</span></span>
+            <i className="square-dot" />
+            <AvatarGroup count={token.calls} />
+          </span>
+        </span>
+      </button>
+      <span className="trend-side">
+        <Sparkline data={token.data} color={positive ? "#34C759" : "#FF3B30"} height={22} />
+      </span>
+    </div>
+  );
+}
+
+function CallerRow({ caller, rank, onClick }) {
+  return (
+    <Row onClick={onClick} className="caller-row">
+      <span className={`rank mono ${rank === 1 ? "gold" : ""}`}>{rank}</span>
+      <Avatar label={caller.name[0].toUpperCase()} color={caller.color} size="sm" />
+      <span className="row-copy">
+        <b>{caller.name}</b>
+        <small><span className="mono">WR {caller.wr}</span> - Avg <span className="mono">{caller.avg}</span></small>
+      </span>
+      <span className="right-stat">
+        <b className="mono green">{caller.pnl}</b>
+        <small>30d PnL</small>
+      </span>
+    </Row>
+  );
+}
+
+function ChatListRow({ chat, onClick }) {
+  return (
+    <Row onClick={onClick} className="telegram-list-row chat-list-row">
+      <Avatar label={chat.avatar} color={chat.color} size="md" />
+      <span className="row-copy">
+        <b>{chat.title} {chat.muted ? <span className="muted-dot">muted</span> : null}</b>
+        <small>{chat.message}</small>
+      </span>
+      <span className="chat-meta">
+        <small className="mono">{chat.time}</small>
+        {chat.unread ? <b>{chat.unread}</b> : chat.pinned ? <span>pin</span> : null}
+      </span>
+    </Row>
+  );
+}
+
+function ContactRow({ contact }) {
+  return (
+    <Row className="telegram-list-row contact-row">
+      <Avatar label={contact.avatar} color={contact.color} size="md" />
+      <span className="row-copy">
+        <b>{contact.name} {contact.star ? <span className="star">★</span> : null}</b>
+        <small>{contact.meta}</small>
+      </span>
+    </Row>
+  );
+}
+
+function CallRow({ call }) {
+  return (
+    <Row className="telegram-list-row call-row">
+      <span className="call-kind"><Icon name={call.video ? "grid" : "calls"} size={20} /></span>
+      <Avatar label={call.avatar} color={call.color} size="md" />
+      <span className="row-copy">
+        <b>{call.name}</b>
+        <small>{call.detail}</small>
+      </span>
+      <span className="call-date">{call.date}</span>
+      <span className="info-button"><Icon name="info" size={24} /></span>
+    </Row>
+  );
+}
+
+function SettingsRow({ item }) {
+  return (
+    <Row className="settings-row">
+      <span className="settings-icon" style={{ background: item.color }}>
+        <Icon name={item.icon} size={22} />
+      </span>
+      <span className="row-copy"><b>{item.label}</b></span>
+      {item.value ? <span className="settings-value">{item.value}</span> : null}
+      <span className="chevron">›</span>
+    </Row>
+  );
+}
+
+function CallCard({ caller, token, onTrade, onCaller }) {
+  return (
+    <div className="call-message">
+      <button className="call-avatar" type="button" onClick={onCaller} style={{ background: caller.color }}>{caller.name[0].toUpperCase()}</button>
+      <div className="call-card">
+        <button className="call-sender" type="button" onClick={onCaller} style={{ color: caller.color }}>
+          {caller.name}<span>- Top 10% - WR {caller.wr}</span>
+        </button>
+        <div className="call-token-row">
+          <Avatar label={token.ticker[1]} color={token.color} size="sm" />
+          <span>
+            <b>{token.ticker}</b>
+            <small>{token.name}</small>
+          </span>
+          <span className="price-side">
+            <LivePrice price={token.price} />
+            <small className={`mono ${token.change.startsWith("+") ? "green" : "red"}`}>{token.change}</small>
+          </span>
+        </div>
+        <div className="call-stats">
+          {[["MC", token.mc], ["Vol 24h", token.vol], ["ATH", token.ath], ["Liq", token.liq]].map(([label, value]) => (
+            <span key={label}><small>{label}</small><b className="mono">{value}</b></span>
+          ))}
+        </div>
+        <LiveSparkline data={token.data} color={token.change.startsWith("+") ? "#34C759" : "#FF3B30"} height={44} marker={token.ticker === "$DEGEN" ? { index: Math.floor(token.data.length / 2) } : null} />
+        <div className="tag-row">
+          <span className="tag good">Bundle 2%</span>
+          <span className="tag warn">Sniper 8%</span>
+          <span className="tag good">Liq ok</span>
+        </div>
+        <button type="button" className="call-cta" onClick={onTrade}>Trade {token.ticker} - 1-tap</button>
+        <time>14:30</time>
+      </div>
+    </div>
+  );
+}
+
+function ChatTokenCard({ token, onTrade }) {
+  const isPrediction = token.marketType === "prediction";
+  return (
+    <div className="chat-token-card-wrap own">
+      <button className={`chat-token-card ${isPrediction ? "prediction-card" : ""}`} type="button" onClick={onTrade}>
+        <div className="chat-token-head">
+          <Avatar label={tokenInitial(token)} color={token.color} size="sm" />
+          <span>
+            <b>{tokenDisplay(token)}</b>
+            <small>{isPrediction ? `${token.market} prediction market` : token.name}</small>
+          </span>
+          <strong><LivePrice price={token.price} /></strong>
+        </div>
+        {isPrediction ? <p className="prediction-question">{token.question}</p> : null}
+        <div className="chat-token-stats">
+          {(isPrediction ? [["Chance", token.price], ["Volume", token.vol], ["High", token.ath], ["Open int.", token.liq]] : [["MC", token.mc], ["Vol 24h", token.vol], ["ATH", token.ath], ["Liq", token.liq]]).map(([label, value]) => (
+            <span key={label}><small>{label}</small><b className="mono">{value}</b></span>
+          ))}
+        </div>
+        <LiveSparkline data={token.data} color={token.change.startsWith("+") ? "#34C759" : "#FF3B30"} height={44} marker={token.ticker === "$DITT" ? { index: token.data.length - 1 } : null} />
+        <div className="tag-row">
+          {isPrediction ? (
+            <>
+              <span className="tag good">High liquidity</span>
+              <span className="tag warn">Headline risk</span>
+              <span className="tag good">Kalshi</span>
+            </>
+          ) : (
+            <>
+              <span className="tag good">Bundle 2%</span>
+              <span className="tag warn">Sniper 8%</span>
+              <span className="tag good">Liq ok</span>
+            </>
+          )}
+        </div>
+        <div className="chat-token-cta">{isPrediction ? "Open market · 1-tap" : `Buy ${token.ticker}`}</div>
+        <time>now ✓✓</time>
+      </button>
+    </div>
+  );
+}
+
+function MessageBubble({ message }) {
+  if (message.type === "date") return <div className="date-pill">{message.label}</div>;
+  if (message.type === "call") return <CallCard caller={message.caller} token={message.token} />;
+  if (message.type === "token") return <ChatTokenCard token={message.token} onTrade={message.onTrade} />;
+  if (message.type === "own") {
     return (
-      <div style={{ ...glassStyle, display: "flex", paddingTop: 8, paddingBottom: "max(12px, env(safe-area-inset-bottom, 12px))", position: "relative", zIndex: 10, flexShrink: 0 }}>
-        {tabs.map(t => {
-          const active = (t.id === "home" ? tab === "home" : tab === t.id) && !chatOpen && !portfolioOpen && !perpOpen && !agentOpen && !notifOpen && !discoveryOpen && !leaderboardOpen;
-          const iconFill   = active ? TG : "none";
-          const iconStroke = active ? "none" : inactiveColor;
-          return (
-            <div key={t.id} onClick={() => navigate(() => { setTab(t.id); setChatOpen(null); setProfileOpen(null); setTradeToken(null); setCallerIdx(-1); setPortfolioOpen(false); setPerpOpen(false); setAgentOpen(false); setNotifOpen(false); setDiscoveryOpen(false); setLeaderboardOpen(false); }, "tab")}
-              style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer", paddingTop: 2, position: "relative" }}>
-              <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", height: 30 }}>
-                <svg width="26" height="26" viewBox="0 0 24 24" fill={iconFill} stroke={iconStroke} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                  <path d={t.d}/>
-                  {t.id === "settings" && <circle cx="12" cy="12" r="3" fill={iconFill} stroke={iconStroke} strokeWidth="1.6"/>}
-                </svg>
-                {t.badge && <div style={{ position: "absolute", top: -3, right: -10, background: RED, color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 9, minWidth: 18, height: 16, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", border: `1.5px solid ${isDark?"rgba(28,28,30,0.9)":"rgba(249,249,249,0.9)"}` }}>{t.badge}</div>}
-                {t.alert && notifBadge > 0 && <div style={{ position: "absolute", top: 0, right: -1, width: 7, height: 7, background: RED, borderRadius: 4, border: `1.5px solid ${isDark?"rgba(28,28,30,0.9)":"rgba(249,249,249,0.9)"}` }} />}
+      <div className="bubble-line own">
+        <div className="bubble own-bubble">
+          <p>{message.text}</p>
+          <span className="bubble-time">{message.time} <b>✓✓</b></span>
+        </div>
+      </div>
+    );
+  }
+  const color = callerColor(message.userId);
+  return (
+    <div className="bubble-line">
+      <Avatar label={message.user[0].toUpperCase()} color={color} size="xs" />
+      <div className="bubble">
+        <b style={{ color }}>{message.user}</b>
+        <p>{message.text}</p>
+        <span className="bubble-time">{message.time}</span>
+      </div>
+    </div>
+  );
+}
+
+function HomeScreen({ openTrade, openDiscover, openCaller, openNotifications, openLeaderboard }) {
+  return (
+    <>
+      <HomeHeader onDiscover={openDiscover} onNotify={openNotifications} />
+      <main className="scroll-content">
+        <SearchField placeholder="Search tokens, callers, groups" />
+        <PortfolioHero onTrade={() => openTrade(TOKENS[0])} />
+        <SectionLabel>Trending from your groups</SectionLabel>
+        <Card className="list-card">
+          {TOKENS.slice(0, 5).map((token) => <TrendRow key={token.ticker} token={token} onOpen={() => openTrade(token)} onBuy={() => openTrade(token)} />)}
+        </Card>
+        <button className="section-label section-label-button" type="button" onClick={openLeaderboard}>Top callers - 30d</button>
+        <Card className="list-card">
+          {CALLERS.slice(0, 4).map((caller, index) => <CallerRow key={caller.name} caller={caller} rank={index + 1} onClick={() => openCaller(caller)} />)}
+        </Card>
+        <div className="bottom-spacer" />
+      </main>
+    </>
+  );
+}
+
+function ContactsScreen() {
+  return (
+    <>
+      <TelegramHeader title="Contacts" leftLabel="Sort" rightIcon="plus" />
+      <main className="scroll-content telegram-page contacts-page">
+        <SearchField placeholder="Search" />
+        <Card className="plain-list contacts-list">
+          <Row className="invite-row">
+            <span className="invite-icon"><Icon name="user" size={31} /></span>
+            <span>Invite Friends</span>
+          </Row>
+          {CONTACTS.map((contact) => <ContactRow key={contact.name} contact={contact} />)}
+        </Card>
+        <div className="bottom-spacer" />
+      </main>
+    </>
+  );
+}
+
+function ChatsScreen({ openChat }) {
+  const [filter, setFilter] = useState("All");
+  return (
+    <>
+      <TelegramHeader leftLabel="Edit" rightIcon="edit">
+        <span className="chat-title-logo"><span className="app-logo ringed">D</span>Chats</span>
+      </TelegramHeader>
+      <main className="scroll-content telegram-page chats-page">
+        <SearchField placeholder="Search" />
+        <div className="wide-segment">
+          {["All", "mentors", "Homie Groups", "DEGEN"].map((item) => (
+            <button key={item} type="button" className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>
+              {item}{item === "Homie Groups" ? <span>1</span> : null}
+            </button>
+          ))}
+        </div>
+        <Card className="plain-list">
+          {CHATS.map((chat) => <ChatListRow key={chat.title} chat={chat} onClick={() => openChat(chat)} />)}
+        </Card>
+        <div className="bottom-spacer" />
+      </main>
+    </>
+  );
+}
+
+function ChatScreen({ chat, onBack, openGroup, openTrade, openCaller, focusCallKey }) {
+  const [draft, setDraft] = useState(chat.id === "cave" ? "2R2F91ewRgZ6R33TcCDebK6Lh6pVTzAKgiURcpgVpump" : "");
+  const [localMessages, setLocalMessages] = useState(() => CHAT_MESSAGES[chat.id] || MESSAGES);
+  const callRefs = useRef({});
+  useEffect(() => {
+    setLocalMessages(CHAT_MESSAGES[chat.id] || MESSAGES);
+    setDraft(chat.id === "cave" ? "2R2F91ewRgZ6R33TcCDebK6Lh6pVTzAKgiURcpgVpump" : "");
+  }, [chat.id]);
+  useEffect(() => {
+    if (!focusCallKey) return;
+    callRefs.current[focusCallKey]?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [focusCallKey]);
+  return (
+    <div className="chat-screen" style={{ backgroundImage: `url(${chatPattern})` }}>
+      <ChatHeader title={chat.title} meta={chat.meta ?? "1,247 members, 89 online"} color={chat.color} onBack={onBack} onProfile={openGroup} />
+      <div className="chat-wallpaper">
+        <div className="pinned-message">
+          <span><b>Pinned Message</b><small>$DEGEN entry thread and risk notes</small></span>
+          <span>pin</span>
+        </div>
+        {localMessages.map((message, index) => {
+          if (message.type === "call") {
+            const callKey = `${message.caller.name}-${message.token.ticker}`;
+            return (
+              <div key={index} ref={(node) => { if (node) callRefs.current[callKey] = node; }} className={focusCallKey === callKey ? "focused-call-message" : ""}>
+                <CallCard caller={message.caller} token={message.token} onTrade={() => openTrade(message.token)} onCaller={() => openCaller(message.caller)} />
               </div>
-              <span style={{ fontSize: 10, fontWeight: active ? 500 : 400, color: active ? TG : inactiveColor, letterSpacing: 0 }}>{t.label}</span>
-            </div>
-          );
+            );
+          }
+          if (message.type === "token") {
+            return <ChatTokenCard key={index} token={message.token} onTrade={() => openTrade(message.token)} />;
+          }
+          return <MessageBubble key={index} message={message} />;
         })}
       </div>
-    );
-  };
+      <form className="chat-input" onSubmit={(event) => {
+        event.preventDefault();
+        const text = draft.trim();
+        if (!text) return;
+        if (text === "2R2F91ewRgZ6R33TcCDebK6Lh6pVTzAKgiURcpgVpump") {
+          setLocalMessages((items) => [...items, { type: "token", token: DITT_TOKEN }]);
+        } else {
+          setLocalMessages((items) => [...items, { type: "own", text, time: "now" }]);
+        }
+        setDraft("");
+      }}>
+        <label className="chat-compose">
+          <Icon name="paperclip" size={22} />
+          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Message" />
+          <span>:-)</span>
+        </label>
+        <button className="mic-button" type="submit" aria-label="Send message"><Icon name={draft ? "plus" : "mic"} size={21} /></button>
+      </form>
+    </div>
+  );
+}
 
-  // ═══════════════════════════════════════
-  // CHATS LIST
-  // ═══════════════════════════════════════
-  const chatList = [
-    { name: "CAVE Alpha Group", avatar: "🐋", bg: "linear-gradient(135deg,#7B68EE,#00C853)", msg: "Kate🚀: Just bought the dip, watchi…", time: "22:01", unread: 9, muted: true },
-    { name: "Solana Builders", avatar: "◎", bg: "linear-gradient(135deg,#9945FF,#14F195)", msg: "new SDK update just dropped", time: "21:58", unread: 24 },
-    { name: "cryptokid.sol", avatar: "🔥", bg: "#D84315", msg: "$DEGEN looking good, aping in", time: "21:45", unread: 3 },
-    { name: "Solana Founders Hub", avatar: "🛠️", bg: "linear-gradient(135deg,#FF6B35,#FFD600)", msg: "Alex: hackathon results!", time: "21:30" },
-    { name: "alphahunter", avatar: "🎯", bg: "#7C4DFF", msg: "$SHILL exit at +320% 🚀", time: "20:55", unread: 2 },
-    { name: "whalemaster", avatar: "🐳", bg: "#00838F", msg: "$PUMP looking strong, holding", time: "20:13" },
-    { name: "DeFi Alpha", avatar: "💎", bg: "linear-gradient(135deg,#00BCD4,#7C4DFF)", msg: "Rose: yield farm update…", time: "19:42", unread: 156, muted: true },
-    { name: "Memecoin Mafia", avatar: "🐸", bg: "linear-gradient(135deg,#43A047,#FDD835)", msg: "frog: WIF holders up 🐶", time: "19:10", unread: 47 },
-    { name: "Pump.fun Snipers", avatar: "🎯", bg: "linear-gradient(135deg,#FF1744,#FF9100)", msg: "new token launching in 2min", time: "18:48", unread: 8 },
-    { name: "Solana Mobile", avatar: "📱", bg: "linear-gradient(135deg,#9945FF,#03DAC6)", msg: "Saga 2 firmware update", time: "17:22", muted: true },
-    { name: "pepelord", avatar: "🐸", bg: "#0277BD", msg: "secured +$9K today 🤝", time: "17:05", unread: 1 },
-    { name: "ren", avatar: "🌊", bg: "#00838F", msg: "alt season incoming", time: "16:30" },
-    { name: "Kate🚀", avatar: "K", bg: "#7B1FA2", msg: "thanks for the call earlier!", time: "15:58", unread: 4 },
-    { name: "solhunter.sol", avatar: "S", bg: "#E3A04F", msg: "TP set at 50% 👍", time: "14:40" },
-    { name: "Jito MEV Bot", avatar: "⚡", bg: "linear-gradient(135deg,#FFD600,#FF6D00)", msg: "Daily rewards: 0.42 SOL", time: "12:00", muted: true },
-    { name: "Trade Wizard", avatar: "🧙", bg: "linear-gradient(135deg,#3F51B5,#9C27B0)", msg: "Strategy backtest complete", time: "Wed", unread: 1 },
-    { name: "NFT Whales", avatar: "🖼️", bg: "linear-gradient(135deg,#E91E63,#FF9800)", msg: "Mad Lads floor 220 SOL", time: "Wed", muted: true },
-    { name: "Saved Messages", avatar: "🔖", bg: TG, msg: "debot-query", time: "Tue", pinned: true },
+function DiscoverScreen({ onBack, openTrade }) {
+  const [query, setQuery] = useState("");
+  const filtered = useMemo(() => TOKENS.filter((token) => `${token.ticker} ${token.name}`.toLowerCase().includes(query.toLowerCase())), [query]);
+  return (
+    <>
+      <HomeHeader title="Discover" onBack={onBack} onNotify={() => {}} />
+      <main className="scroll-content">
+        <SearchField value={query} onChange={setQuery} placeholder="Search tokens, callers..." />
+        <FilterChips items={["trending", "new", "top", "watchlist"]} active="trending" onChange={() => {}} />
+        <SectionLabel>{query ? "Search results" : "Trending tokens"}</SectionLabel>
+        <Card className="list-card">
+          {filtered.map((token) => <TrendRow key={token.ticker} token={token} onOpen={() => openTrade(token)} onBuy={() => openTrade(token)} />)}
+        </Card>
+        <SectionLabel>Recommended callers</SectionLabel>
+        <Card className="list-card">
+          {CALLERS.map((caller, index) => <CallerRow key={caller.name} caller={caller} rank={index + 1} onClick={() => {}} />)}
+        </Card>
+        <div className="bottom-spacer" />
+      </main>
+    </>
+  );
+}
+
+function TokenAvatar({ token, size = "lg" }) {
+  return (
+    <span className={`token-avatar token-avatar-${size}`} style={{ background: token.color }} aria-hidden="true">
+      <span className="token-avatar-letter">{token.ticker.replace("$", "").slice(0, 1)}</span>
+      <span className="verified-dot">✓</span>
+    </span>
+  );
+}
+
+function TokenLineChart({ token, compact = false, showCallers = false, onOpenCaller }) {
+  const source = token.data.length > 20 ? token.data : token.data.flatMap((value, index) => [value, value + (index % 2 ? -3 : 4), value + (index % 3 ? 2 : -5)]);
+  const data = source.slice(0, 50);
+  const positive = token.change.startsWith("+");
+  const chartColor = positive ? "#34C759" : "#FF3B30";
+  const width = 390;
+  const height = compact ? 178 : 390;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const points = data.map((value, index) => `${(index / (data.length - 1)) * width},${height - ((value - min) / (max - min)) * (height - 34) - 17}`);
+  const fill = `${points.join(" ")} ${width},${height} 0,${height}`;
+  const callerMarkers = showCallers ? CALLERS.slice(0, 4).map((caller, index) => {
+    const markerIndexes = [7, 15, 24, 34];
+    const point = points[Math.min(markerIndexes[index], points.length - 1)].split(",").map(Number);
+    return { caller, point };
+  }) : [];
+  return (
+    <svg className={`token-chart ${compact ? "compact" : ""}`} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${token.ticker} price chart`}>
+      <defs>
+        <pattern id="token-grid" width="10" height="10" patternUnits="userSpaceOnUse">
+          <circle cx="1" cy="1" r="0.8" fill="rgba(60,60,67,0.10)" />
+        </pattern>
+        <linearGradient id="token-chart-fill" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor={chartColor} stopOpacity="0.20" />
+          <stop offset="100%" stopColor={chartColor} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <rect width={width} height={height} fill="url(#token-grid)" />
+      <polygon points={fill} fill="url(#token-chart-fill)" />
+      <polyline points={points.join(" ")} fill="none" stroke={chartColor} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+      {callerMarkers.map(({ caller, point }) => (
+        <g
+          className="token-caller-marker"
+          key={caller.name}
+          role="button"
+          tabIndex="0"
+          aria-label={`Open ${caller.name} profile`}
+          transform={`translate(${point[0]}, ${point[1]})`}
+          onClick={() => onOpenCaller?.(caller)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") onOpenCaller?.(caller);
+          }}
+        >
+          <circle r="14" fill={caller.color} stroke="#fff" strokeWidth="3" />
+          <text y="4" textAnchor="middle">{caller.name[0].toUpperCase()}</text>
+        </g>
+      ))}
+      <circle cx={width - 1} cy={points[points.length - 1].split(",")[1]} r="7" fill={chartColor} />
+    </svg>
+  );
+}
+
+function TokenTopBar({ token, onBack, compact = false }) {
+  return (
+    <header className={`token-topbar ${compact ? "compact" : ""}`}>
+      <button className="token-icon-button" type="button" onClick={onBack} aria-label="Back"><Icon name="back" size={28} /></button>
+      <TokenAvatar token={token} size="md" />
+      <div className="token-title-block">
+        <strong>{token.ticker.replace("$", "")} <span className="chain-pill">=</span></strong>
+        <span>{token.name} <small>□</small></span>
+      </div>
+      <div className="token-actions">
+        <div className="token-price-mini">
+          <strong className="mono">{token.price}</strong>
+          <span className={`mono ${token.change.startsWith("+") ? "up" : "down"}`}>{token.change.replace("+", "")}</span>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function TokenTabBar({ active, onChange }) {
+  return (
+    <div className="token-tabs" role="tablist" aria-label="Token sections">
+      {["Calls", "About"].map((item) => (
+        <button key={item} type="button" role="tab" className={active === item ? "active" : ""} onClick={() => onChange(item)}>
+          {item}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function TokenTimeframes() {
+  return (
+    <div className="token-timeframes">
+      {["1H", "4H", "1D", "7D", "3M", "ALL"].map((item, index) => <button key={item} type="button" className={index === 0 ? "active" : ""}>{item}</button>)}
+      <span className="token-tf-divider" />
+      <button className="candle-toggle" type="button" aria-label="Candles"><i /><i /><i /></button>
+    </div>
+  );
+}
+
+function HolderRow({ name, value, change, note, avatar, down = false }) {
+  return (
+    <div className="holder-row">
+      <span className="holder-avatar" style={{ background: avatar }}>{name.slice(0, 1)}</span>
+      <div className="holder-copy">
+        <strong>{name}</strong>
+        <span>◷ {down ? "1d 8h" : "2d 16h"} avg. hold</span>
+        {note ? <em>{note}</em> : null}
+      </div>
+      <div className="holder-value">
+        <strong className="mono">{value}</strong>
+        <span className={`mono ${down ? "down" : "up"}`}>{down ? "▼" : "▲"} {change}</span>
+      </div>
+    </div>
+  );
+}
+
+function TokenCallRow({ caller, token, index, onOpen }) {
+  const mc = ["$34K", "$58K", "$81K", "$120K"][index % 4];
+  const times = ["2 hours ago", "4 hours ago", "Yesterday", "04/30"];
+  const groups = ["CAVE meme alpha group", "Daiko Factory", "SOLTRENDING", "KOLscope"];
+  return (
+    <button className="token-call-row" type="button" onClick={() => onOpen(caller, token)}>
+      <Avatar label={caller.name[0].toUpperCase()} color={caller.color} size="sm" />
+      <div>
+        <strong>{caller.name}</strong>
+        <span>Called at <b className="mono">{mc}</b></span>
+        <p>{times[index % times.length]} · {groups[index % groups.length]}</p>
+      </div>
+      <em className="mono">{caller.wr} WR</em>
+    </button>
+  );
+}
+
+function TokenAboutContent({ token }) {
+  const stats = token.marketType === "prediction" ? [
+    ["Market", token.market || "Kalshi"],
+    ["Chance", token.price],
+    ["Volume", token.vol],
+    ["Open interest", token.liq],
+    ["High", token.ath],
+    ["Updated", "Live"],
+    ["Category", "Prediction"],
+    ["Settlement", "Event result"],
+  ] : [
+    ["Market cap", token.mc],
+    ["24h volume", token.vol],
+    ["Liquidity", token.liq],
+    ["ATH", token.ath],
+    ["Supply", token.supply || "999.8M"],
+    ["Created", token.created || "6 mo. ago"],
+    ["Launchpad", token.launchpad || "Pump.fun"],
+    ["Blockchain", token.chain || "Solana"],
+    ["Contract address □", token.address || "8J69rb...R"],
   ];
-  const ChatsListScreen = () => (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: isDark ? "#000" : "#fff" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 16px 4px", background: T.headerBg }}>
-        <div style={{ fontSize: 17, padding: "6px 14px", background: T.bg2, borderRadius: 18, color: T.text }}>Edit</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 28, height: 28, borderRadius: 14, background: TG, display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>D</span></div>
-          <span style={{ fontSize: 17, fontWeight: 600, color: T.text }}>Chats</span>
-        </div>
-        <div style={{ display: "flex", gap: 16 }}>
-          <div onClick={() => navigate(() => setNotifOpen(true))} style={{ position: "relative", cursor: "pointer" }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={TG} strokeWidth="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-            {NOTIFICATIONS.filter(n=>!n.read).length > 0 && <div style={{ position: "absolute", top: -3, right: -3, width: 8, height: 8, borderRadius: 4, background: RED, border: "1.5px solid #fff" }}/>}
-          </div>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={TG} strokeWidth="2"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+  return (
+    <div className="token-about">
+      <div className="token-description">
+        <div><h2>Description</h2><button type="button"><Icon name="search" size={20} />Search on Twitter</button></div>
+        <p>{tokenDescription(token)}</p>
+        <div className="token-links">
+          {["Website", "Twitter", "Telegram"].map((item) => <button key={item} type="button">{item}</button>)}
         </div>
       </div>
-      <div style={{ padding: "4px 16px 6px", background: T.headerBg }}>
-        <div style={{ background: T.searchBg, borderRadius: 10, padding: "8px 12px", display: "flex", alignItems: "center", gap: 6 }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.text2} strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-          <span style={{ fontSize: 16, color: T.text2 }}>Search</span>
-        </div>
-      </div>
-      <div style={{ display: "flex", padding: "0 16px 6px" }}>
-        {["All","mentors","Homie Groups","Nice"].map((f,i) => (
-          <div key={f} style={{ padding: "4px 14px", fontSize: 14, fontWeight: i===0?600:400, color: i===0?TG:T.text2, borderBottom: i===0?`2px solid ${TG}`:"none", whiteSpace: "nowrap", cursor: "pointer" }}>{f}</div>
-        ))}
-      </div>
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", overscrollBehaviorY: "contain" }}>
-        {chatList.map((c,i) => (
-          <div key={i} onClick={() => goChat(c.name)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 16px", cursor: "pointer", background: T.card }}>
-            <div style={{ width: 56, height: 56, borderRadius: 28, background: c.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: c.avatar.length > 1 ? 22 : 24, color: "#fff", fontWeight: 700, flexShrink: 0 }}>{c.avatar}</div>
-            <div style={{ flex: 1, minWidth: 0, borderBottom: "0.5px solid #C6C6C830", paddingBottom: 8 }}>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 16, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{c.name}{c.muted && <span style={{ marginLeft: 4, fontSize: 12, color: "#C7C7CC" }}>🔇</span>}</span>
-                <span style={{ fontSize: 14, color: "#8E8E93", flexShrink: 0, marginLeft: 8 }}>{c.time}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 2 }}>
-                <span style={{ fontSize: 15, color: "#8E8E93", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{c.msg}</span>
-                {c.unread && <div style={{ background: c.muted?"#C7C7CC":TG, color: "#fff", fontSize: 13, fontWeight: 600, borderRadius: 12, minWidth: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 6px", marginLeft: 8, flexShrink: 0 }}>{c.unread}</div>}
-                {c.pinned && <span style={{ color: "#C7C7CC", fontSize: 14, marginLeft: 8 }}>📌</span>}
-              </div>
-            </div>
+      <div className="token-transactions">
+        <div className="token-section-head"><h2>Transactions</h2><span>5M <b>1H</b> 1D</span></div>
+        {[[["334", "buys"], ["271", "sells"]], [["$43.3K", "vol."], ["$55.1K", "vol."]], [["168", "buyers"], ["183", "sellers"]]].map((row, index) => (
+          <div className="tx-row" key={index}>
+            <div><strong>{row[0][0]}</strong> <span>{row[0][1]}</span></div>
+            <div><strong>{row[1][0]}</strong> <span>{row[1][1]}</span></div>
+            <span className="tx-bars"><i /><i /></span>
           </div>
         ))}
+      </div>
+      <div className="token-stats-list">
+        <h2>Stats</h2>
+        {stats.map(([label, value]) => <div key={label}><span>{label}</span><i /><strong>{value}</strong></div>)}
       </div>
     </div>
   );
+}
 
-  // ═══════════════════════════════════════
-  // CHAT VIEW
-  // ═══════════════════════════════════════
-  const ChatView = () => {
-    const scrollAreaRef = (el) => {
-      if (!el || !scrollToMsg) return;
-      const msgId = scrollToMsg;
-      setTimeout(() => {
-        const target = el.querySelector("[data-msgid='" + msgId + "']");
-        if (target) target.scrollIntoView({ behavior: "smooth", block: "center" });
-        setScrollToMsg(null);
-      }, 150);
-    };
-
-    const DateSep = ({ label }) => (
-      <div style={{ textAlign: "center", padding: "8px 0" }}>
-        <span style={{ background: "rgba(0,0,0,0.18)", color: "#fff", fontSize: 12, padding: "3px 14px", borderRadius: 12, fontWeight: 500 }}>{label}</span>
-      </div>
-    );
-
-    const SysMsg = ({ text }) => (
-      <div style={{ textAlign: "center", padding: "2px 0" }}>
-        <span style={{ background: "rgba(0,0,0,0.12)", color: "#fff", fontSize: 12, padding: "3px 12px", borderRadius: 12 }}>{text}</span>
-      </div>
-    );
-
-    const Msg = ({ avatar, avatarBg, name, nameColor, badge: msgBadge, text, time, replyTo }) => (
-      <div style={{ maxWidth: "82%", display: "flex", gap: 4, alignItems: "flex-end" }}>
-        <div style={{ width: 28, height: 28, borderRadius: 14, background: avatarBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, flexShrink: 0, color: "#fff", fontWeight: 700 }}>{avatar}</div>
-        <div style={{ background: "#fff", borderRadius: "2px 16px 16px 16px", padding: "5px 10px 4px", boxShadow: "0 1px 1px rgba(0,0,0,0.06)", maxWidth: "100%" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: nameColor }}>{name}</span>
-            {msgBadge && <span style={{ background: "#E3F2FD", color: "#1565C0", fontSize: 10, padding: "1px 5px", borderRadius: 4, fontWeight: 600 }}>{msgBadge}</span>}
-          </div>
-          {replyTo && (
-            <div style={{ borderLeft: "3px solid " + replyTo.color, paddingLeft: 7, marginBottom: 4, background: "rgba(0,0,0,0.03)", borderRadius: "0 4px 4px 0", padding: "3px 7px" }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: replyTo.color }}>{replyTo.name}</div>
-              <div style={{ fontSize: 12, color: "#8E8E93", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 200 }}>{replyTo.text}</div>
-            </div>
-          )}
-          <div style={{ fontSize: 15.5, color: "#000", lineHeight: 1.4 }}>{text}</div>
-          <div style={{ fontSize: 11, color: "#8E8E93", textAlign: "right", marginTop: 2 }}>{time}</div>
-        </div>
-      </div>
-    );
-
-    const OwnMsg = ({ text, time, read }) => (
-      <div style={{ alignSelf: "flex-end", maxWidth: "76%" }}>
-        <div style={{ background: "#DCFFD4", borderRadius: "16px 2px 16px 16px", padding: "5px 10px 4px", boxShadow: "0 1px 1px rgba(0,0,0,0.05)" }}>
-          <div style={{ fontSize: 15.5, color: "#000", lineHeight: 1.4 }}>{text}</div>
-          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 3, marginTop: 2 }}>
-            <span style={{ fontSize: 11, color: "#5aab4f" }}>{time}</span>
-            {read !== false && <svg width="15" height="10" viewBox="0 0 20 10"><path d="M1 5l4 4L14 1M8 5l4 4L21 1" stroke="#4CAF50" strokeWidth="1.8" fill="none" strokeLinecap="round"/></svg>}
-          </div>
-        </div>
-      </div>
-    );
-
-    const CallCard = ({ msgId, callerName, callerColor, callerIdxVal, badge: cardBadge, winRate,
-      token, tokenSub, tokenPrice, tokenChange, tokenBg, tokenLetter,
-      mc, vol, ath, liq, tags, links, sparkData, time }) => (
-      <div data-msgid={msgId} style={{ maxWidth: "93%", display: "flex", gap: 4, alignItems: "flex-end" }}>
-        <div onClick={() => navigate(() => setCallerIdx(callerIdxVal))}
-          style={{ width: 28, height: 28, borderRadius: 14, background: callerColor, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, flexShrink: 0, cursor: "pointer", color: "#fff", fontWeight: 700 }}>
-          {callerName[0]}
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ background: "#fff", borderRadius: "2px 16px 16px 16px", overflow: "hidden", boxShadow: "0 1px 2px rgba(0,0,0,0.08)" }}>
-            <div style={{ padding: "6px 10px 4px", display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
-              <span onClick={() => navigate(() => setCallerIdx(callerIdxVal))}
-                style={{ fontSize: 13.5, fontWeight: 700, color: callerColor, cursor: "pointer" }}>{callerName}</span>
-              <span style={{ background: "#FBE9E7", color: "#C62828", fontSize: 10, padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>{cardBadge}</span>
-              <span style={{ background: "#E8F5E9", color: "#2E7D32", fontSize: 10, padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>WR {winRate}</span>
-            </div>
-            <div style={{ margin: "0 8px 0", borderRadius: 12, border: "1px solid #EBEBEB", overflow: "hidden", background: "#FAFAFA" }}>
-              <div style={{ padding: "10px 12px 6px", display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ position: "relative", flexShrink: 0 }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 19, background: tokenBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, color: "#fff" }}>{tokenLetter}</div>
-                  <div style={{ position: "absolute", bottom: -2, right: -2, width: 15, height: 15, borderRadius: 8, overflow: "hidden", border: "2px solid #FAFAFA" }}>
-                    <img src="https://assets.coingecko.com/coins/images/28207/large/mSOL.png" style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="SOL" />
-                  </div>
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 15, color: "#000" }}>{token}</div>
-                  <div style={{ fontSize: 12, color: "#8E8E93" }}>{tokenSub}</div>
-                </div>
-                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 16, color: "#000" }}>{tokenPrice}</div>
-                  <div style={{ fontSize: 12, color: GREEN, fontWeight: 600 }}>{tokenChange}</div>
-                </div>
-              </div>
-              <div style={{ display: "flex", padding: "0 12px 6px", gap: 12, fontSize: 12 }}>
-                {[["MC", mc], ["Vol", vol], ["ATH", ath], ["Liq", liq]].map(function(item) {
-                  return <div key={item[0]}><span style={{ color: "#8E8E93" }}>{item[0]} </span><span style={{ color: "#444", fontWeight: 500 }}>{item[1]}</span></div>;
-                })}
-              </div>
-              <div style={{ padding: "0 12px 4px" }}><Sparkline data={sparkData} color={GREEN} /></div>
-              <div style={{ display: "flex", gap: 4, padding: "2px 12px 8px", flexWrap: "wrap" }}>
-                {tags.map(function(tag) {
-                  var tagColor = tag[1] === "good" ? { bg: "#E8F5E9", text: "#2E7D32" } : tag[1] === "warn" ? { bg: "#FFF8E1", text: "#E65100" } : { bg: "#FCE4EC", text: "#880E4F" };
-                  return <span key={tag[0]} style={{ background: tagColor.bg, color: tagColor.text, fontSize: 11, padding: "2px 7px", borderRadius: 5, fontWeight: 500 }}>{tag[0]}</span>;
-                })}
-              </div>
-              <div style={{ padding: "6px 12px 8px", borderTop: "1px solid #EBEBEB", display: "flex", alignItems: "center", gap: 6, fontSize: 12, flexWrap: "wrap" }}>
-                {links.map(function(link) {
-                  return <span key={link[0]} style={{ color: TG, fontWeight: 500, cursor: "pointer" }}>{link[0]}{link[1] ? "✅" : "❌"}</span>;
-                })}
-                <span style={{ color: "#DDD", margin: "0 2px" }}>·</span>
-                <span style={{ color: TG, fontWeight: 500, cursor: "pointer" }}>Chart</span>
-                <span style={{ color: "#DDD", margin: "0 2px" }}>·</span>
-                <span style={{ color: TG, fontWeight: 500, cursor: "pointer" }}>Bubble</span>
-              </div>
-            </div>
-            <div onClick={() => navigate(() => setTradeToken(token.replace("$", "")))}
-              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, margin: "8px", padding: "10px", borderRadius: 10, background: TG, cursor: "pointer", fontWeight: 600, fontSize: 14, color: "#fff" }}>
-              ⚡ Trade {token}
-            </div>
-            <div style={{ fontSize: 11, color: "#8E8E93", textAlign: "right", padding: "0 10px 5px" }}>{time}</div>
-          </div>
-        </div>
-      </div>
-    );
-
-    const OwnCallCard = ({ token, tokenSub, tokenPrice, tokenChange, tokenBg, tokenLetter,
-      mc, vol, ath, liq, tags, links, sparkData, time, ca }) => (
-      <div style={{ alignSelf: "flex-end", maxWidth: "93%", display: "flex" }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ background: "#DCFFD4", borderRadius: "16px 2px 16px 16px", overflow: "hidden", boxShadow: "0 1px 2px rgba(0,0,0,0.08)" }}>
-            <div style={{ padding: "6px 10px 4px", display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 13.5, fontWeight: 700, color: "#1B5E20" }}>You</span>
-              <span style={{ background: "rgba(46,125,50,0.15)", color: "#1B5E20", fontSize: 10, padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>SHARED</span>
-            </div>
-            {ca && <div style={{ padding: "0 10px 4px", fontSize: 11, color: "#33691E", fontFamily: "ui-monospace, Menlo, monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ca}</div>}
-            <div style={{ margin: "0 8px 0", borderRadius: 12, border: "1px solid rgba(46,125,50,0.2)", overflow: "hidden", background: "#F1FCEE" }}>
-              <div style={{ padding: "10px 12px 6px", display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ position: "relative", flexShrink: 0 }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 19, background: tokenBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, color: "#fff" }}>{tokenLetter}</div>
-                  <div style={{ position: "absolute", bottom: -2, right: -2, width: 15, height: 15, borderRadius: 8, overflow: "hidden", border: "2px solid #F1FCEE" }}>
-                    <img src="https://assets.coingecko.com/coins/images/28207/large/mSOL.png" style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="SOL" />
-                  </div>
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 15, color: "#000" }}>{token}</div>
-                  <div style={{ fontSize: 12, color: "#558B2F" }}>{tokenSub}</div>
-                </div>
-                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 16, color: "#000" }}>{tokenPrice}</div>
-                  <div style={{ fontSize: 12, color: GREEN, fontWeight: 600 }}>{tokenChange}</div>
-                </div>
-              </div>
-              <div style={{ display: "flex", padding: "0 12px 6px", gap: 12, fontSize: 12 }}>
-                {[["MC", mc], ["Vol", vol], ["ATH", ath], ["Liq", liq]].map(function(item) {
-                  return <div key={item[0]}><span style={{ color: "#558B2F" }}>{item[0]} </span><span style={{ color: "#33691E", fontWeight: 500 }}>{item[1]}</span></div>;
-                })}
-              </div>
-              <div style={{ padding: "0 12px 4px" }}><Sparkline data={sparkData} color={GREEN} /></div>
-              <div style={{ display: "flex", gap: 4, padding: "2px 12px 8px", flexWrap: "wrap" }}>
-                {tags.map(function(tag) {
-                  var tagColor = tag[1] === "good" ? { bg: "#E8F5E9", text: "#2E7D32" } : tag[1] === "warn" ? { bg: "#FFF8E1", text: "#E65100" } : { bg: "#FCE4EC", text: "#880E4F" };
-                  return <span key={tag[0]} style={{ background: tagColor.bg, color: tagColor.text, fontSize: 11, padding: "2px 7px", borderRadius: 5, fontWeight: 500 }}>{tag[0]}</span>;
-                })}
-              </div>
-              <div style={{ padding: "6px 12px 8px", borderTop: "1px solid rgba(46,125,50,0.2)", display: "flex", alignItems: "center", gap: 6, fontSize: 12, flexWrap: "wrap" }}>
-                {links.map(function(link) {
-                  return <span key={link[0]} style={{ color: TG, fontWeight: 500, cursor: "pointer" }}>{link[0]}{link[1] ? "✅" : "❌"}</span>;
-                })}
-                <span style={{ color: "#BBB", margin: "0 2px" }}>·</span>
-                <span style={{ color: TG, fontWeight: 500, cursor: "pointer" }}>Chart</span>
-              </div>
-            </div>
-            <div onClick={() => navigate(() => setTradeToken(token.replace("$", "")))}
-              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, margin: "8px", padding: "10px", borderRadius: 10, background: TG, cursor: "pointer", fontWeight: 600, fontSize: 14, color: "#fff" }}>
-              ⚡ Trade {token}
-            </div>
-            <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 3, padding: "0 10px 5px" }}>
-              <span style={{ fontSize: 11, color: "#5aab4f" }}>{time}</span>
-              <svg width="15" height="10" viewBox="0 0 20 10"><path d="M1 5l4 4L14 1M8 5l4 4L21 1" stroke="#4CAF50" strokeWidth="1.8" fill="none" strokeLinecap="round"/></svg>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-
-    return (
-      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", padding: "6px 12px 6px 4px", background: TG, color: "#fff", gap: 6 }}>
-          <div onClick={goBack} style={{ cursor: "pointer", padding: "4px 6px", fontSize: 26, fontWeight: 300, lineHeight: 1 }}>‹</div>
-          <div onClick={() => navigate(() => setProfileOpen("group"))}
-            style={{ width: 36, height: 36, borderRadius: 18, background: "rgba(255,255,255,0.22)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, cursor: "pointer", flexShrink: 0 }}>🐋</div>
-          <div onClick={() => navigate(() => setProfileOpen("group"))} style={{ flex: 1, cursor: "pointer", minWidth: 0 }}>
-            <div style={{ fontWeight: 600, fontSize: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>CAVE Alpha Group</div>
-            <div style={{ fontSize: 12, opacity: 0.75 }}>1,247 members, 89 online</div>
-          </div>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="1.8"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="1.8" style={{ marginLeft: 6 }}><circle cx="12" cy="5" r="1.5" fill="rgba(255,255,255,0.85)"/><circle cx="12" cy="12" r="1.5" fill="rgba(255,255,255,0.85)"/><circle cx="12" cy="19" r="1.5" fill="rgba(255,255,255,0.85)"/></svg>
-        </div>
-
-        <div ref={scrollAreaRef} style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", overscrollBehaviorY: "contain", padding: "6px 8px 8px", display: "flex", flexDirection: "column", gap: 4,
-          background: isDark ? "#0F1C12" : "#C8DFCC",
-          backgroundImage: isDark ? "none" : "url(\"data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23a8c4ae' fill-opacity='0.20'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/svg%3E\")" }}>
-
-
-
-          {chatMessages.map((m, idx) => {
-            const k = m.id || idx;
-            if (m.type === "date") return <DateSep key={k} label={m.label} />;
-            if (m.type === "sys") return <SysMsg key={k} text={m.text} />;
-            if (m.type === "msg") return <Msg key={k} avatar={m.avatar} avatarBg={m.avatarBg} name={m.name} nameColor={m.nameColor} badge={m.badge} text={m.text} time={m.time} replyTo={m.replyTo} />;
-            if (m.type === "own") return <OwnMsg key={k} text={m.text} time={m.time} read={m.read} />;
-            if (m.type === "ownPending") return <OwnMsg key={k} text={m.text} time={m.time} read={false} />;
-            if (m.type === "call") return <CallCard key={k} msgId={m.msgId} callerName={m.callerName} callerColor={m.callerColor} callerIdxVal={m.callerIdxVal} badge={m.badge} winRate={m.winRate} token={m.token} tokenSub={m.tokenSub} tokenPrice={m.tokenPrice} tokenChange={m.tokenChange} tokenBg={m.tokenBg} tokenLetter={m.tokenLetter} mc={m.mc} vol={m.vol} ath={m.ath} liq={m.liq} tags={m.tags} links={m.links} sparkData={m.sparkData} time={m.time} />;
-            if (m.type === "ownCall") return <OwnCallCard key={k} {...m} />;
-            return null;
-          })}
-        </div>
-
-        <div style={{ padding: "6px 8px", borderTop: "0.5px solid " + (isDark ? "rgba(255,255,255,0.1)" : "#C6C6C8"), background: isDark ? "#1C1C1E" : "#fff", display: "flex", gap: 6, alignItems: "center" }}>
-          <div style={{ width: 34, height: 34, borderRadius: 17, background: isDark ? "#2C2C2E" : "#F2F2F7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer" }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="1.8"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
-          </div>
-          <input
-            type="text"
-            value={draftMessage}
-            onChange={(e) => setDraftMessage(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSend(); } }}
-            placeholder="Message"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck={false}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              background: isDark ? "#2C2C2E" : "#F2F2F7",
-              border: "none",
-              outline: "none",
-              borderRadius: 20,
-              padding: "8px 14px",
-              fontSize: 16,
-              color: isDark ? "#fff" : "#000",
-              fontFamily: "inherit",
-            }}
-          />
-          {draftMessage.trim() ? (
-            <div onClick={handleSend} style={{ width: 34, height: 34, borderRadius: 17, background: TG, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer" }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
-            </div>
-          ) : (
-            <>
-              <div style={{ width: 34, height: 34, borderRadius: 17, background: isDark ? "#2C2C2E" : "#F2F2F7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer" }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="1.8"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
-              </div>
-              <div style={{ width: 34, height: 34, borderRadius: 17, background: TG, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer" }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  // ═══════════════════════════════════════
-  // GROUP PROFILE
-  // ═══════════════════════════════════════
-  const GroupProfile = () => {
-    const gTabs = ["Top Callers","Members","Media","Saved","Files","Links"];
-    return (
-      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: BG }}>
-        <div style={{ background: "#fff", textAlign: "center", paddingBottom: 16 }}>
-          <div style={{ display: "flex", padding: "8px 16px" }}><div onClick={goBack} style={{ cursor: "pointer", fontSize: 28, color: TG, fontWeight: 300 }}>‹</div></div>
-          <div style={{ width: 80, height: 80, borderRadius: 40, background: "linear-gradient(135deg,#7B68EE,#00C853)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, margin: "0 auto 8px" }}>🐋</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: "#000" }}>CAVE Alpha Group</div>
-          <div style={{ fontSize: 15, color: "#8E8E93", marginTop: 2 }}>1,247 members, 89 online</div>
-          <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 14, padding: "0 30px" }}>
-            {[["🔔","unmute"],["🔍","search"],["🚪","leave"],["•••","more"]].map(([ic,lb]) => (
-              <div key={lb} style={{ flex: 1, background: "#F2F2F7", borderRadius: 12, padding: "10px 4px 8px", textAlign: "center", cursor: "pointer" }}>
-                <div style={{ fontSize: 18 }}>{ic}</div>
-                <div style={{ fontSize: 12, color: TG, marginTop: 2 }}>{lb}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div style={{ flex: 1, overflowY: "auto" }}>
-          <div style={{ background: "#fff", margin: "8px 0", padding: "12px 16px" }}>
-            <div style={{ fontSize: 13, color: "#8E8E93" }}>share link</div>
-            <div style={{ fontSize: 16, color: TG, marginTop: 2 }}>https://t.me/CAVE_Alpha</div>
-            <div style={{ height: 0.5, background: "#C6C6C830", margin: "10px 0" }} />
-            <div style={{ fontSize: 13, color: "#8E8E93" }}>description</div>
-            <div style={{ fontSize: 16, color: "#000", marginTop: 2 }}>CAVE Alpha · Solana Degen Calls</div>
-          </div>
-
-          {/* ── Group Performance Stats ── */}
-          <div style={{ background: "#fff", margin: "0 0 8px", padding: "14px 16px" }}>
-            <div style={{ fontSize: 13, color: "#8E8E93", fontWeight: 500, marginBottom: 10, letterSpacing: 0.2 }}>GROUP PERFORMANCE</div>
-            {/* 4 stat boxes */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
-              {[
-                { label: "Calls (30d)", value: "284", color: "#000" },
-                { label: "Win Rate", value: "71%", color: GREEN },
-                { label: "Avg Return", value: "6.8x", color: TG },
-                { label: "Total PnL", value: "+$284K", color: GREEN },
-              ].map(({ label, value, color }) => (
-                <div key={label} style={{ background: "#F7F7F7", borderRadius: 10, padding: "10px 6px", textAlign: "center" }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color }}>{value}</div>
-                  <div style={{ fontSize: 10, color: "#8E8E93", marginTop: 3, lineHeight: 1.2 }}>{label}</div>
-                </div>
-              ))}
-            </div>
-            {/* Win/Loss bar */}
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#8E8E93", marginBottom: 5 }}>
-              <span>Win <span style={{ color: GREEN, fontWeight: 600 }}>202</span></span>
-              <span>Loss <span style={{ color: RED, fontWeight: 600 }}>82</span></span>
-            </div>
-            <WinLossBar wins={202} losses={82} />
-            {/* Cumulative PnL sparkline */}
-            <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 12, color: "#8E8E93", marginBottom: 4 }}>Cumulative PnL (30d)</div>
-              <Sparkline data={[10,24,18,42,38,65,58,90,84,112,108,140,135,168,180,172,210,225,215,248,260,245,280,275,284]} color={GREEN} height={44} />
-            </div>
-            {/* Top calls */}
-            <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 12, color: "#8E8E93", marginBottom: 6 }}>Top calls this month</div>
-              <div style={{ display: "flex", gap: 6 }}>
-                {[["$MOON","🚀","+1,240%","#FFD700"],["$DEGEN","🔥","+412%",GREEN],["$SHILL","⚡","+320%",PURPLE]].map(([token, emoji, ret, c]) => (
-                  <div key={token} style={{ flex: 1, background: "#F7F7F7", borderRadius: 10, padding: "8px 6px", textAlign: "center" }}>
-                    <div style={{ fontSize: 14 }}>{emoji}</div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#000", marginTop: 2 }}>{token}</div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: c, marginTop: 1 }}>{ret}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            {/* Footer stats row */}
-            <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between", paddingTop: 10, borderTop: "0.5px solid #C6C6C830" }}>
-              {[["Volume (30d)","$8.4M"],["Callers","12"],["Members","1,247"]].map(([l,v]) => (
-                <div key={l} style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: "#000" }}>{v}</div>
-                  <div style={{ fontSize: 11, color: "#8E8E93", marginTop: 1 }}>{l}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div style={{ background: "#fff" }}>
-            <div style={{ display: "flex", padding: "0 8px", borderBottom: "0.5px solid #C6C6C830", overflowX: "auto" }}>
-              {gTabs.map(t => (
-                <div key={t} onClick={() => setGroupTab(t)} style={{ padding: "8px 10px", fontSize: 14, fontWeight: groupTab===t?600:400, color: groupTab===t?TG:"#000", borderBottom: groupTab===t?`2px solid ${TG}`:"none", cursor: "pointer", whiteSpace: "nowrap" }}>{t}</div>
-              ))}
-            </div>
-            {groupTab === "Top Callers" ? (
-              <div style={{ padding: "4px 0" }}>
-                {CALLERS.map((cl, i) => (
-                  <div key={i} onClick={() => navigate(() => setCallerIdx(i))} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderBottom: "0.5px solid #C6C6C830", cursor: "pointer" }}>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: i < 3 ? ["#FFD700","#C0C0C0","#CD7F32"][i] : "#C7C7CC", width: 22, textAlign: "center" }}>#{i+1}</div>
-                    <div style={{ width: 40, height: 40, borderRadius: 20, background: cl.c, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 16 }}>{cl.name[0].toUpperCase()}</div>
-                    <div style={{ flex: 1 }}><div style={{ fontSize: 16, fontWeight: 500, color: "#000" }}>{cl.name}</div><div style={{ fontSize: 13, color: "#8E8E93" }}>WR {cl.wr} · Avg {cl.avg} · {cl.calls} calls</div></div>
-                    <div style={{ textAlign: "right" }}><div style={{ fontWeight: 700, fontSize: 14, color: GREEN }}>{cl.pnl}</div><div style={{ fontSize: 11, color: "#8E8E93" }}>{cl.followers} followers</div></div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div style={{ padding: "4px 0" }}>
-                {["Yuki | Daiko","SEN UHI","Kazuki","Kate 🚀"].map((n,i) => (
-                  <div key={n} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", borderBottom: "0.5px solid #C6C6C830" }}>
-                    <div style={{ width: 40, height: 40, borderRadius: 20, background: ["#D84315","#FF9500","#5C6BC0","#00BCD4","#E91E63"][i], display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 16 }}>{n[0]}</div>
-                    <div><div style={{ fontSize: 16, fontWeight: 500, color: "#000" }}>{n}</div><div style={{ fontSize: 13, color: i===0?GREEN:"#8E8E93" }}>{i===0?"online":"last seen recently"}</div></div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // ═══════════════════════════════════════
-  // TRADE SCREEN
-  // ═══════════════════════════════════════
-  const TradeScreen = () => (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: BG }}>
-      <div style={{ display: "flex", alignItems: "center", padding: "6px 10px", background: TG, color: "#fff", gap: 8 }}>
-        <div onClick={goBack} style={{ cursor: "pointer", fontSize: 22, fontWeight: 300, padding: "0 4px" }}>‹</div>
-        <div style={{ flex: 1, fontWeight: 600, fontSize: 16 }}>⚡ Trade $DEGEN</div>
-        <span style={{ fontSize: 13, opacity: 0.8 }}>💰 12.4 SOL</span>
-      </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: "8px 12px" }}>
-        <div style={{ background: "#fff", borderRadius: 12, padding: "12px", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 22, background: "linear-gradient(135deg,#00C853,#00ACC1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, color: "#fff" }}>D</div>
-          <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 18, color: "#000" }}>$DEGEN</div><div style={{ fontSize: 13, color: "#8E8E93" }}>DegenProtocol</div></div>
-          <div style={{ textAlign: "right" }}><div style={{ fontWeight: 700, fontSize: 20, color: "#000" }}>$0.0042</div><div style={{ fontSize: 13, color: GREEN, fontWeight: 600 }}>▲ 184.2%</div></div>
-        </div>
-        <div style={{ background: "#fff", borderRadius: 12, padding: "12px", marginBottom: 8 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, fontSize: 13 }}>
-            {["1H","4H","1D","1W"].map(t => (
-              <span key={t} onClick={() => setChartTf(t)} style={{ color: chartTf===t?TG:"#C7C7CC", fontWeight: chartTf===t?600:400, cursor: "pointer", padding: "2px 8px", borderRadius: 6, background: chartTf===t?"#EBF3FE":"transparent" }}>{t}</span>
-            ))}
-          </div>
-          <CandleChart h={110} />
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 10, color: "#C7C7CC" }}>
-            <span>12:00</span><span>14:00</span><span>16:00</span><span>Now</span>
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 8 }}>
-          {[["MC","$420K"],["24h Vol","$1.2M"],["Liquidity","$85K"]].map(([l,v]) => (
-            <div key={l} style={{ background: "#fff", borderRadius: 10, padding: "10px", textAlign: "center" }}>
-              <div style={{ fontSize: 11, color: "#8E8E93" }}>{l}</div><div style={{ fontSize: 15, fontWeight: 600, color: "#000", marginTop: 2 }}>{v}</div>
-            </div>
-          ))}
-        </div>
-        <div style={{ display: "flex", background: "#fff", borderRadius: 10, padding: 3, marginBottom: 8 }}>
-          {["buy","sell"].map(m => (
-            <div key={m} onClick={() => setTradeMode(m)} style={{ flex: 1, textAlign: "center", padding: "10px", borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: "pointer", background: tradeMode===m?(m==="buy"?GREEN:RED):"transparent", color: tradeMode===m?"#fff":"#C7C7CC", transition: "all 0.2s" }}>{m.toUpperCase()}</div>
-          ))}
-        </div>
-        <div style={{ fontSize: 13, color: "#8E8E93", marginBottom: 5, fontWeight: 500 }}>Amount (SOL)</div>
-        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-          {["0.1","0.5","1","2","5"].map(a => (
-            <div key={a} onClick={() => setSelAmt(a)} style={{ flex: 1, textAlign: "center", padding: "10px 0", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", background: selAmt===a?TG:"#fff", color: selAmt===a?"#fff":"#333", transition: "all 0.15s" }}>{a}</div>
-          ))}
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#8E8E93", marginBottom: 14 }}><span>Slippage</span><span style={{ color: "#333" }}>15%</span></div>
-        <div onClick={() => showToast(tradeMode==="buy" ? `✅ Bought ${selAmt||"0.5"} SOL of $DEGEN` : "✅ Sold $DEGEN → 12.9 SOL")} style={{ padding: "14px", borderRadius: 12, textAlign: "center", fontWeight: 700, fontSize: 16, cursor: "pointer", background: tradeMode==="buy"?GREEN:RED, color: "#fff" }}>
-          {tradeMode==="buy"?`BUY ${selAmt||"___"} SOL`:"SELL $DEGEN"}
-        </div>
-      </div>
-    </div>
-  );
-
-  // ═══════════════════════════════════════
-  // CALLER PROFILE
-  // ═══════════════════════════════════════
-  const CallerProfile = () => {
-    const cl = CALLERS[callerIdx] || CALLERS[0];
-    const isAlertsOn = alertedCallers[callerIdx];
-    const isCopyTradeOn = copyTradeCallers[callerIdx];
-    return (
-      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: BG }}>
-        <div style={{ background: "#fff", textAlign: "center", paddingBottom: 16 }}>
-          <div style={{ display: "flex", padding: "8px 16px" }}><div onClick={goBack} style={{ cursor: "pointer", fontSize: 28, color: TG, fontWeight: 300 }}>‹</div></div>
-          <div style={{ width: 80, height: 80, borderRadius: 40, background: cl.c, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, margin: "0 auto 8px", color: "#fff", fontWeight: 700 }}>{cl.name[0].toUpperCase()}</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: "#000" }}>{cl.name}</div>
-          <div style={{ fontSize: 15, color: "#8E8E93", marginTop: 2 }}>last seen recently · {cl.followers} followers</div>
-          <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 14, padding: "0 16px" }}>
-            {[["💬","message"],["📞","call"],["🎥","video"],["🔔","mute"],["•••","more"]].map(([ic,lb]) => (
-              <div key={lb} style={{ flex: 1, background: "#F2F2F7", borderRadius: 12, padding: "10px 4px 8px", textAlign: "center", cursor: "pointer" }}>
-                <div style={{ fontSize: 18 }}>{ic}</div>
-                <div style={{ fontSize: 12, color: TG, marginTop: 2 }}>{lb}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", overscrollBehaviorY: "contain" }}>
-          <div style={{ padding: "10px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-            <div onClick={() => toggleAlerts(callerIdx)} style={{ padding: "12px", borderRadius: 12, textAlign: "center", fontWeight: 600, fontSize: 16, cursor: "pointer", background: isAlertsOn ? "#fff" : TG, color: isAlertsOn ? TG : "#fff", border: isAlertsOn ? `1.5px solid ${TG}` : "1.5px solid transparent" }}>
-              {isAlertsOn ? "🔔 Alerts On" : "🔔 Get Alerts"}
-            </div>
-            <div onClick={() => toggleCopyTrade(callerIdx)} style={{ padding: "12px", borderRadius: 12, textAlign: "center", fontWeight: 600, fontSize: 16, cursor: "pointer", background: isCopyTradeOn ? "#fff" : "#0A84FF", color: isCopyTradeOn ? "#0A84FF" : "#fff", border: isCopyTradeOn ? `1.5px solid #0A84FF` : "1.5px solid transparent" }}>
-              {isCopyTradeOn ? "✓ Copy Trading" : "⚡ Copy Trade"}
-            </div>
-          </div>
-          <div style={{ padding: "0 16px 0", fontSize: 13, color: "#8E8E93", fontWeight: 500 }}>CALLER STATS</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, margin: "6px 16px" }}>
-            {[[cl.wr,"Win Rate",GREEN],[cl.avg,"Avg Return",TG],[String(cl.calls),"Total Calls","#FF9500"]].map(([v,l,c]) => (
-              <div key={l} style={{ background: "#fff", borderRadius: 10, padding: "12px 8px", textAlign: "center" }}>
-                <div style={{ fontSize: 22, fontWeight: 700, color: c }}>{v}</div>
-                <div style={{ fontSize: 11, color: "#8E8E93", marginTop: 2 }}>{l}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{ background: "#fff", borderRadius: 12, margin: "8px 16px", padding: "12px" }}>
-            <div style={{ fontSize: 13, color: "#8E8E93", marginBottom: 4 }}>Follower PnL (30d)</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: GREEN, marginBottom: 4 }}>{cl.pnl}</div>
-            <Sparkline data={[100,120,115,140,180,170,210,250,240,280,320,350,340,380,420,460]} />
-          </div>
-          <div style={{ background: "#fff", borderRadius: 12, margin: "0 16px 8px", padding: "12px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#8E8E93", marginBottom: 6 }}>
-              <span>Win <span style={{ color: GREEN, fontWeight: 600 }}>{cl.wins}</span></span>
-              <span>Loss <span style={{ color: RED, fontWeight: 600 }}>{cl.losses}</span></span>
-            </div>
-            <WinLossBar wins={cl.wins} losses={cl.losses} />
-          </div>
-          <div style={{ padding: "0 16px", fontSize: 13, color: "#8E8E93", fontWeight: 500 }}>RECENT CALLS</div>
-          <div style={{ background: "#fff", borderRadius: 12, margin: "6px 16px 16px", overflow: "hidden" }}>
-            {PAST_CALLS.map((pc,i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderTop: i?"0.5px solid #C6C6C830":"none" }}>
-                <div style={{ width: 34, height: 34, borderRadius: 17, background: pc.c, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: "#fff" }}>{pc.token[1]}</div>
-                <div style={{ flex: 1 }}><div style={{ fontWeight: 600, fontSize: 15, color: "#000" }}>{pc.token}</div><div style={{ fontSize: 12, color: "#8E8E93" }}>{pc.time}</div></div>
-                <div style={{ fontWeight: 700, fontSize: 15, color: pc.win?GREEN:RED }}>{pc.result}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // ═══════════════════════════════════════
-  // PORTFOLIO SCREEN
-  // ═══════════════════════════════════════
-  const PortfolioScreen = () => (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: BG }}>
-      <div style={{ display: "flex", alignItems: "center", padding: "6px 10px", background: TG, color: "#fff", gap: 8 }}>
-        <div onClick={goBack} style={{ cursor: "pointer", fontSize: 22, fontWeight: 300, padding: "0 4px" }}>‹</div>
-        <div style={{ flex: 1, textAlign: "center" }}><span style={{ fontSize: 16, fontWeight: 600 }}>◎ Solana ▾</span></div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff" opacity="0.8"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff" opacity="0.8"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
-        </div>
-      </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: "8px 16px" }}>
-        <div style={{ background: "#fff", borderRadius: 16, padding: "18px", marginBottom: 8, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-            <span style={{ fontSize: 15, color: "#000", fontWeight: 500 }}>Daikogram Wallet ▾</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 4 }}>
-            <span style={{ fontSize: 36, fontWeight: 700, color: "#000" }}>1,247.50</span>
-            <span style={{ fontSize: 18, color: "#8E8E93" }}>USD</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14 }}>
-            <span style={{ fontSize: 14, color: "#8E8E93" }}>MuC5...CDS</span>
-            <span style={{ background: "#E8F5E9", color: "#2E7D32", fontSize: 11, padding: "1px 6px", borderRadius: 4, fontWeight: 500 }}>Main</span>
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            {[["↑","Send"],["↓","Receive"],["⇄","Swap"]].map(([ic,lb]) => (
-              <div key={lb} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px", borderRadius: 12, border: "1px solid #E5E5EA", cursor: "pointer", fontSize: 15, color: "#000", fontWeight: 500 }}>
-                <span style={{ fontSize: 14 }}>{ic}</span>{lb}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", padding: "0 0 8px" }}>
-          {["Token","NFT","dApps"].map((t,i) => (
-            <span key={t} style={{ fontSize: 16, fontWeight: i===0?600:400, color: i===0?"#000":"#8E8E93", marginRight: 20, borderBottom: i===0?`2px solid ${TG}`:"none", paddingBottom: 4, cursor: "pointer" }}>{t}</span>
-          ))}
-        </div>
-        {[
-          { name: "SOL", price: "$137.59", amount: "8.24", value: "$1,133.74", change: "+3.9%", up: true,
-            logo: "https://assets.coingecko.com/coins/images/28207/large/mSOL.png",
-            fallbackBg: "linear-gradient(135deg,#9945FF,#14F195)", fallbackIcon: "◎" },
-          { name: "DEGEN", price: "$0.0042", amount: "24,500", value: "$102.90", change: "+184%", up: true,
-            logo: "https://cdn.dexscreener.com/cms/images/c865067e6e29f660b5d0c2a69814875c7415c3fc0022434651525c21f03cc24a?width=64&height=64&fit=crop&quality=95&format=auto",
-            fallbackBg: "linear-gradient(135deg,#00C853,#00ACC1)", fallbackIcon: "D" },
-          { name: "RAY", price: "$0.5924", amount: "15.2", value: "$9.01", change: "-2.1%", up: false,
-            logo: "https://cdn.dexscreener.com/cms/images/654ec0cee3ecf3fd5d55c56302d82300ee114ee1ff91e52897798b486993f6c8?width=64&height=64&fit=crop&quality=95&format=auto",
-            fallbackBg: "#7C4DFF", fallbackIcon: "R" },
-          { name: "USDT", price: "$0.9998", amount: "1.85", value: "$1.85", change: "+0.0%", up: true,
-            logo: "https://upload.wikimedia.org/wikipedia/commons/0/01/USDT_Logo.png",
-            fallbackBg: "#26A17B", fallbackIcon: "₮" },
-        ].map((tk, i) => (
-          <div key={i} style={{ background: T.card, borderRadius: 12, padding: "12px 14px", marginBottom: 4, display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 42, height: 42, borderRadius: 21, background: tk.fallbackBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "#fff", flexShrink: 0, overflow: "hidden" }}>
-              {tk.logo
-                ? <img src={tk.logo} alt={tk.name} style={{ width: 42, height: 42, borderRadius: 21, objectFit: "cover" }} onError={e => { e.target.style.display="none"; }} />
-                : tk.fallbackIcon}
-            </div>
-            <div style={{ flex: 1 }}><div style={{ fontWeight: 600, fontSize: 16, color: T.text }}>{tk.name}</div><div style={{ fontSize: 13, color: T.text2 }}>{tk.price}</div></div>
-            <div style={{ textAlign: "right" }}><div style={{ fontWeight: 600, fontSize: 16, color: T.text }}>{tk.amount}</div><div style={{ fontSize: 13, color: tk.up?GREEN:RED }}>{tk.change}</div></div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
-  // ═══════════════════════════════════════
-  // DAIKOGRAM TAB
-  // ═══════════════════════════════════════
-  const DaikogramScreen = () => {
-    const accent = isDark ? "#8E7CFF" : PURPLE;
-    const surface = isDark ? "#151519" : "#fff";
-    const pageBg = isDark ? "#08080A" : "#FBFAF8";
-    const softText = isDark ? "#9898A3" : "#9B9BA2";
-    const cardBorder = isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(28,28,35,0.08)";
-    const cardShadow = isDark ? "none" : "0 10px 26px rgba(25,25,35,0.06)";
-    const walletLine = [38,40,39,43,49,47,55,61,59,67,75,83,91,89,98,105];
-    const trendRows = [
-      { token: "$DEGEN", change: "+184%", mc: "$420K", c: "linear-gradient(135deg,#4AF2B4,#28D4DF)", callers: 12, badges: [["C","#E88B58"],["A","#7D9BFA"],["K","#ED5EA4"]], msgId: "call1", data: [8,9,9,11,10,12,14,13,16,17,19,20,22] },
-      { token: "$SHILL", change: "+320%", mc: "$180K", c: "linear-gradient(135deg,#B07BFF,#F057C8)", callers: 23, badges: [["A","#7995F2"],["W","#26C0A7"]], msgId: "call2", data: [7,7,8,9,11,14,15,17,19,22,25,29] },
-      { token: "$PUMP", change: "+42%", mc: "$1.2M", c: "linear-gradient(135deg,#FF9358,#FFD262)", callers: 8, badges: [["W","#23AFC3"],["C","#E56C4B"],["D","#F0A33B"]], msgId: "call3", data: [12,13,14,16,17,19,21,24,25,27,30,34] },
-    ];
-    const topCallers = [CALLERS[1], CALLERS[0], CALLERS[2]];
-
-    const IconButton = ({ children, onClick, badge }) => (
-      <div onClick={onClick} style={{ position: "relative", width: 54, height: 54, borderRadius: 19, background: surface, border: cardBorder, boxShadow: isDark ? "none" : "0 6px 16px rgba(20,20,30,0.06)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
-        {children}
-        {badge && <div style={{ position: "absolute", top: 12, right: 12, width: 11, height: 11, borderRadius: 6, background: accent, border: `2px solid ${surface}` }} />}
-      </div>
-    );
-
-    const ActionButton = ({ kind, icon, label, onClick }) => (
-      <div onClick={(e) => { e.stopPropagation(); onClick?.(); }} style={{ flex: 1, minWidth: 0, height: 64, borderRadius: 16, background: kind === "primary" ? accent : (isDark ? "#1F1F24" : "#F8F6F2"), border: kind === "primary" ? "none" : cardBorder, color: kind === "primary" ? "#fff" : T.text, display: "flex", alignItems: "center", justifyContent: "center", gap: 9, fontSize: 16, fontWeight: 800, boxShadow: kind === "primary" ? `0 12px 22px ${accent}40` : "none", cursor: "pointer" }}>
-        <span style={{ fontSize: 22, lineHeight: 1 }}>{icon}</span>
-        <span>{label}</span>
-      </div>
-    );
-
-    const CallerBadges = ({ badges }) => (
-      <div style={{ display: "inline-flex", alignItems: "center", marginLeft: 8, marginRight: 4 }}>
-        {badges.map((b, i) => (
-          <span key={`${b[0]}-${i}`} style={{ width: 21, height: 21, borderRadius: 6, background: b[1], color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 900, marginLeft: i ? -5 : 0, border: `1.5px solid ${surface}` }}>{b[0]}</span>
-        ))}
-      </div>
-    );
-
-    const TrendCard = ({ row }) => (
-      <div style={{ background: surface, borderRadius: 23, border: cardBorder, boxShadow: cardShadow, padding: "18px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 12 }}>
-        <div onClick={() => goToCall(row.msgId)} style={{ display: "flex", alignItems: "center", gap: 14, flex: 1, minWidth: 0, cursor: "pointer" }}>
-          <div style={{ width: 62, height: 62, borderRadius: 20, background: row.c, display: "flex", alignItems: "center", justifyContent: "center", color: "#121219", fontSize: 27, fontWeight: 900, flexShrink: 0 }}>{row.token[1]}</div>
-          <div style={{ minWidth: 0, flex: 1, overflow: "hidden" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-              <span style={{ fontSize: 19, color: T.text, fontWeight: 900, letterSpacing: -0.8, whiteSpace: "nowrap" }}>{row.token}</span>
-              <span style={{ color: GREEN, fontSize: 18, fontWeight: 900, whiteSpace: "nowrap" }}>{row.change}</span>
-            </div>
-            <div style={{ marginTop: 4, display: "flex", alignItems: "center", color: softText, fontSize: 17, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden" }}>
-              <span>MC {row.mc}</span>
-              <span style={{ padding: "0 8px" }}>·</span>
-              <CallerBadges badges={row.badges} />
-              <span>{row.callers} callers</span>
-            </div>
-          </div>
-        </div>
-        <div style={{ width: 92, flexShrink: 0, alignSelf: "stretch", display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "space-between", gap: 9 }}>
-          <div style={{ width: 92, paddingTop: 5 }}>
-            <Sparkline data={row.data} color="#49F3A2" width={92} height={28} />
-          </div>
-          <div onClick={(e) => { e.stopPropagation(); navigate(() => setTradeToken(row.token)); }} style={{ minWidth: 84, height: 52, borderRadius: 17, background: accent, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 18, cursor: "pointer", boxShadow: `0 10px 20px ${accent}45` }}>Buy</div>
-        </div>
-      </div>
-    );
-
-    return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%", background: pageBg }}>
-        <div style={{ flex: 1, overflowY: "auto", padding: "10px 24px 22px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 22 }}>
-            <div>
-              <div style={{ color: softText, fontSize: 16, fontWeight: 800, letterSpacing: 1.8, textTransform: "uppercase", marginBottom: 7 }}>Good evening</div>
-              <div style={{ color: T.text, fontSize: 30, fontWeight: 900, letterSpacing: -1.1 }}>Alex</div>
-            </div>
-            <div style={{ display: "flex", gap: 12 }}>
-              <IconButton onClick={() => navigate(() => setDiscoveryOpen(true))}>
-                <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke={T.text} strokeWidth="2.2" strokeLinecap="round"><circle cx="11" cy="11" r="7.5"/><path d="M20 20l-3.6-3.6"/></svg>
-              </IconButton>
-              <IconButton onClick={() => navigate(() => setNotifOpen(true))} badge={NOTIFICATIONS.some(n => !n.read)}>
-                <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke={T.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 8.5-3 8.5h18S18 15 18 8"/><path d="M13.6 20a2 2 0 0 1-3.2 0"/></svg>
-              </IconButton>
-            </div>
-          </div>
-
-          <div onClick={() => navigate(() => setPortfolioOpen(true))} style={{ position: "relative", overflow: "hidden", background: `linear-gradient(145deg, ${isDark ? "#16161B" : "#fff"} 0%, ${isDark ? "#111116" : "#FFF"} 56%, ${isDark ? "#10201D" : "#F5FFFC"} 100%)`, borderRadius: 28, border: cardBorder, boxShadow: cardShadow, padding: "36px 24px 30px", marginBottom: 31, cursor: "pointer" }}>
-            <div style={{ position: "absolute", inset: 0, background: `radial-gradient(circle at 6% 0%, ${accent}12, transparent 40%), radial-gradient(circle at 96% 98%, ${GREEN}13, transparent 42%)`, pointerEvents: "none" }} />
-            <div style={{ position: "relative" }}>
-              <div style={{ color: softText, fontSize: 16, fontWeight: 900, letterSpacing: 2.2, textTransform: "uppercase", marginBottom: 13 }}>Portfolio · Daikogram Wallet</div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 5, marginBottom: 10 }}>
-                <span style={{ color: T.text, fontSize: "clamp(45px, 12.6vw, 58px)", fontWeight: 900, letterSpacing: -3.8, lineHeight: 1 }}>$12,847</span>
-                <span style={{ color: isDark ? "#777780" : "#A3A3AA", fontSize: "clamp(45px, 12.6vw, 58px)", fontWeight: 900, letterSpacing: -3.8, lineHeight: 1 }}>.50</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 13, marginBottom: 25 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 7, height: 31, padding: "0 15px", borderRadius: 16, background: isDark ? "rgba(52,199,89,0.16)" : "#DDF8EA", color: "#18A864", fontSize: 16, fontWeight: 900 }}>
-                  <span style={{ fontSize: 15 }}>⌃</span>
-                  <span>+$612.40 · +12.4%</span>
-                </div>
-                <span style={{ color: softText, fontSize: 17, fontWeight: 600 }}>today</span>
-              </div>
-              <div style={{ padding: "4px 2px 24px" }}>
-                <Sparkline data={walletLine} color={accent} width={430} height={90} />
-              </div>
-              <div style={{ display: "flex", gap: 12 }}>
-                <ActionButton kind="primary" icon="↑" label="Send" onClick={() => showToast("Send coming soon")} />
-                <ActionButton icon="↓" label="Receive" onClick={() => showToast("Receive coming soon")} />
-                <ActionButton icon="↙↗" label="Swap" onClick={() => showToast("Swap coming soon")} />
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <div style={{ color: softText, fontSize: 16, fontWeight: 900, letterSpacing: 2.4, textTransform: "uppercase" }}>Trending from your groups</div>
-            <div onClick={() => navigate(() => setDiscoveryOpen(true))} style={{ color: accent, fontSize: 17, fontWeight: 800, cursor: "pointer" }}>See all</div>
-          </div>
-          {trendRows.map(row => <TrendCard key={row.token} row={row} />)}
-
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "34px 0 12px" }}>
-            <div style={{ color: softText, fontSize: 16, fontWeight: 900, letterSpacing: 2.4, textTransform: "uppercase" }}>Top callers · 30d</div>
-            <div onClick={() => navigate(() => setLeaderboardOpen(true))} style={{ color: accent, fontSize: 17, fontWeight: 800, cursor: "pointer" }}>Leaderboard</div>
-          </div>
-          {topCallers.map((c, i) => (
-            <div key={c.name} onClick={() => navigate(() => { setCallerIdx(CALLERS.findIndex(item => item.name === c.name)); setChatOpen("daikogram_caller"); })} style={{ background: surface, borderRadius: 23, border: cardBorder, boxShadow: cardShadow, padding: "16px 20px", marginBottom: 14, display: "flex", alignItems: "center", gap: 16, cursor: "pointer" }}>
-              <div style={{ width: 34, color: i === 0 ? "#D58E2F" : softText, fontSize: 18, fontWeight: 900, fontVariantNumeric: "tabular-nums" }}>{String(i + 1).padStart(2, "0")}</div>
-              <div style={{ width: 58, height: 58, borderRadius: 18, background: i === 0 ? accent : c.c, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 25, fontWeight: 900 }}>{c.name[0].toUpperCase()}</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ color: T.text, fontSize: 18, fontWeight: 900, letterSpacing: -0.4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
-                <div style={{ color: softText, fontSize: 15, fontWeight: 600, marginTop: 4 }}>WR {c.wr} · Avg {c.avg}</div>
-              </div>
-              <div style={{ color: GREEN, fontSize: 18, fontWeight: 900 }}>{c.pnl}</div>
-            </div>
-          ))}
-          <div style={{ height: 8 }} />
-        </div>
-      </div>
-    );
-  };
-
-  // ═══════════════════════════════════════
-  // PERP TRADE SCREEN (NEW)
-  // ═══════════════════════════════════════
-  const PerpTradeScreen = () => {
-    const PAIRS = ["SOL-PERP","ETH-PERP","BTC-PERP","JUP-PERP","WIF-PERP"];
-    const pairPrices = { "SOL-PERP": "$137.59", "ETH-PERP": "$3,210", "BTC-PERP": "$67,400", "JUP-PERP": "$0.842", "WIF-PERP": "$2.14" };
-    const pairChanges = { "SOL-PERP": "+3.9%", "ETH-PERP": "+7.8%", "BTC-PERP": "-1.2%", "JUP-PERP": "+12.4%", "WIF-PERP": "+28.6%" };
-    const pairUp = { "SOL-PERP": true, "ETH-PERP": true, "BTC-PERP": false, "JUP-PERP": true, "WIF-PERP": true };
-    const levPresets = [2,3,5,10,20];
-    const totalUnrealPnl = PERP_POSITIONS.reduce((sum, p) => {
-      const v = parseFloat(p.pnl.replace(/[+$,]/g,"")) * (p.pnl.startsWith("-")?-1:1);
-      return sum + v;
-    }, 0);
-    return (
-      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: "#0d0d0d" }}>
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", padding: "6px 10px 6px", background: "#111", gap: 8, borderBottom: "0.5px solid #222" }}>
-          <div onClick={() => navigate(() => setPerpOpen(false), "pop")} style={{ cursor: "pointer", fontSize: 22, fontWeight: 300, padding: "0 4px", color: "#fff" }}>‹</div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>📊 Perp Trading</div>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 12, color: "#666" }}>Unrealized PnL</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: totalUnrealPnl >= 0 ? GREEN : RED }}>{totalUnrealPnl >= 0 ? "+" : ""}${totalUnrealPnl.toFixed(0)}</div>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div style={{ display: "flex", background: "#111", borderBottom: "0.5px solid #222" }}>
-          {["positions","trade","orders"].map(t => (
-            <div key={t} onClick={() => setPerpTab(t)} style={{ flex: 1, textAlign: "center", padding: "10px", fontSize: 14, fontWeight: perpTab===t?600:400, color: perpTab===t?TG:"#555", borderBottom: perpTab===t?`2px solid ${TG}`:"none", cursor: "pointer", textTransform: "capitalize" }}>{t}</div>
-          ))}
-        </div>
-
-        <div style={{ flex: 1, overflowY: "auto" }}>
-          {perpTab === "positions" && (
-            <div style={{ padding: "8px 12px" }}>
-              {/* Summary row */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 10 }}>
-                {[["Margin Used","$485.20","#fff"],["Free Margin","$762.30","#fff"],["Total PnL",`+$${totalUnrealPnl.toFixed(0)}`,GREEN]].map(([l,v,c]) => (
-                  <div key={l} style={{ background: "#1a1a1a", borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
-                    <div style={{ fontSize: 10, color: "#555" }}>{l}</div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: c, marginTop: 3 }}>{v}</div>
-                  </div>
-                ))}
-              </div>
-              {/* Position cards */}
-              {PERP_POSITIONS.map((pos, i) => (
-                <div key={i} style={{ background: "#1a1a1a", borderRadius: 12, padding: "12px", marginBottom: 8, border: `0.5px solid ${pos.win?"#1a3a1a":"#3a1a1a"}` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ fontWeight: 700, fontSize: 16, color: "#fff" }}>{pos.pair}</div>
-                      <span style={{ background: pos.side==="LONG"?"#1a3a1a":"#3a1a1a", color: pos.side==="LONG"?GREEN:RED, fontSize: 11, padding: "2px 8px", borderRadius: 4, fontWeight: 600 }}>{pos.side}</span>
-                      <span style={{ background: "#222", color: "#888", fontSize: 11, padding: "2px 6px", borderRadius: 4 }}>{pos.lev}</span>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontWeight: 700, fontSize: 16, color: pos.win?GREEN:RED }}>{pos.pnl}</div>
-                      <div style={{ fontSize: 12, color: pos.win?GREEN:RED }}>{pos.pnlPct}</div>
-                    </div>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4, fontSize: 11 }}>
-                    {[["Size",pos.size],["Entry",pos.entry],["Mark",pos.mark],["Liq.",pos.liq]].map(([l,v]) => (
-                      <div key={l}><div style={{ color: "#555" }}>{l}</div><div style={{ color: "#ccc", marginTop: 1 }}>{v}</div></div>
-                    ))}
-                  </div>
-                  <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
-                    <div onClick={() => showToast(`✅ Added margin to ${pos.pair}`)} style={{ flex: 1, padding: "7px", borderRadius: 8, border: "1px solid #333", textAlign: "center", fontSize: 12, color: "#aaa", cursor: "pointer" }}>+ Margin</div>
-                    <div onClick={() => showToast(`⚠️ TP/SL set for ${pos.pair}`)} style={{ flex: 1, padding: "7px", borderRadius: 8, border: "1px solid #333", textAlign: "center", fontSize: 12, color: "#aaa", cursor: "pointer" }}>TP / SL</div>
-                    <div onClick={() => showToast(`🔴 Closed ${pos.pair}`)} style={{ flex: 1, padding: "7px", borderRadius: 8, background: "#3a1a1a", textAlign: "center", fontSize: 12, color: RED, cursor: "pointer", fontWeight: 600 }}>Close</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {perpTab === "trade" && (
-            <div style={{ padding: "8px 12px" }}>
-              {/* Pair selector */}
-              <div style={{ display: "flex", gap: 6, marginBottom: 10, overflowX: "auto", paddingBottom: 2 }}>
-                {PAIRS.map(p => (
-                  <div key={p} onClick={() => setPerpPair(p)} style={{ flexShrink: 0, padding: "6px 12px", borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: "pointer", background: perpPair===p?TG:"#1a1a1a", color: perpPair===p?"#fff":"#888", border: `1px solid ${perpPair===p?TG:"#333"}` }}>{p}</div>
-                ))}
-              </div>
-              {/* Price card */}
-              <div style={{ background: "#1a1a1a", borderRadius: 12, padding: "12px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: 13, color: "#555" }}>{perpPair}</div>
-                  <div style={{ fontSize: 24, fontWeight: 700, color: "#fff", marginTop: 2 }}>{pairPrices[perpPair]}</div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: pairUp[perpPair]?GREEN:RED }}>{pairChanges[perpPair]}</div>
-                  <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>24h</div>
-                </div>
-              </div>
-              {/* Mini chart */}
-              <div style={{ background: "#1a1a1a", borderRadius: 12, padding: "10px", marginBottom: 8 }}>
-                <CandleChart h={80} />
-              </div>
-              {/* Long/Short */}
-              <div style={{ display: "flex", background: "#1a1a1a", borderRadius: 10, padding: 3, marginBottom: 10 }}>
-                {["long","short"].map(m => (
-                  <div key={m} onClick={() => setPerpMode(m)} style={{ flex: 1, textAlign: "center", padding: "10px", borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: "pointer", background: perpMode===m?(m==="long"?GREEN:RED):"transparent", color: perpMode===m?"#fff":"#555", transition: "all 0.2s", textTransform: "uppercase" }}>{m}</div>
-                ))}
-              </div>
-              {/* Leverage */}
-              <div style={{ fontSize: 13, color: "#555", marginBottom: 6 }}>Leverage: <span style={{ color: "#fff", fontWeight: 600 }}>{perpLev}x</span></div>
-              <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-                {levPresets.map(l => (
-                  <div key={l} onClick={() => setPerpLev(l)} style={{ flex: 1, textAlign: "center", padding: "8px 0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", background: perpLev===l?"#7C4DFF":"#1a1a1a", color: perpLev===l?"#fff":"#666", border: `1px solid ${perpLev===l?"#7C4DFF":"#333"}` }}>{l}x</div>
-                ))}
-              </div>
-              {/* Size */}
-              <div style={{ fontSize: 13, color: "#555", marginBottom: 6 }}>Size (SOL)</div>
-              <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-                {["0.5","1","2","5"].map(a => (
-                  <div key={a} onClick={() => setPerpSize(a)} style={{ flex: 1, textAlign: "center", padding: "10px 0", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", background: perpSize===a?TG:"#1a1a1a", color: perpSize===a?"#fff":"#666", border: `1px solid ${perpSize===a?TG:"#333"}` }}>{a}</div>
-                ))}
-              </div>
-              {/* Order details */}
-              <div style={{ background: "#1a1a1a", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
-                {[["Order Value",`~$${(parseFloat(perpSize||"1") * parseFloat(pairPrices[perpPair].replace(/[$,]/g,"")) * perpLev).toLocaleString("en",{maximumFractionDigits:0})}`],["Liq. Price","~$"+(perpMode==="long"?"105.90":"169.30")],["Fees","~$0.32"]].map(([l,v],i) => (
-                  <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderTop: i?"0.5px solid #222":"none" }}>
-                    <span style={{ fontSize: 13, color: "#555" }}>{l}</span>
-                    <span style={{ fontSize: 13, color: "#ccc" }}>{v}</span>
-                  </div>
-                ))}
-              </div>
-              <div onClick={() => showToast(`✅ ${perpMode.toUpperCase()} ${perpSize} ${perpPair} @ ${perpLev}x`)} style={{ padding: "14px", borderRadius: 12, textAlign: "center", fontWeight: 700, fontSize: 16, cursor: "pointer", background: perpMode==="long"?GREEN:RED, color: "#fff" }}>
-                {perpMode==="long"?`LONG ${perpPair}`:`SHORT ${perpPair}`}
-              </div>
-            </div>
-          )}
-
-          {perpTab === "orders" && (
-            <div style={{ padding: "8px 12px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <span style={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>Open Orders</span>
-                <span style={{ fontSize: 13, color: RED, cursor: "pointer" }}>Cancel All</span>
-              </div>
-              {[
-                { pair: "SOL-PERP", type: "Limit", side: "LONG", price: "$130.00", size: "3 SOL", lev: "5x", filled: "0%" },
-                { pair: "WIF-PERP", type: "Stop", side: "SHORT", price: "$2.50", size: "100 WIF", lev: "3x", filled: "0%" },
-              ].map((o, i) => (
-                <div key={i} style={{ background: "#1a1a1a", borderRadius: 12, padding: "12px", marginBottom: 8 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontWeight: 700, fontSize: 15, color: "#fff" }}>{o.pair}</span>
-                      <span style={{ background: o.side==="LONG"?"#1a3a1a":"#3a1a1a", color: o.side==="LONG"?GREEN:RED, fontSize: 11, padding: "2px 6px", borderRadius: 4, fontWeight: 600 }}>{o.side}</span>
-                      <span style={{ background: "#222", color: "#666", fontSize: 11, padding: "2px 6px", borderRadius: 4 }}>{o.type}</span>
-                    </div>
-                    <div onClick={() => showToast(`❌ Order cancelled`)} style={{ fontSize: 12, color: RED, cursor: "pointer", padding: "4px 10px", borderRadius: 8, background: "#2a1010" }}>Cancel</div>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4, fontSize: 11 }}>
-                    {[["Price",o.price],["Size",o.size],["Lev",o.lev],["Filled",o.filled]].map(([l,v]) => (
-                      <div key={l}><div style={{ color: "#555" }}>{l}</div><div style={{ color: "#ccc", marginTop: 1 }}>{v}</div></div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              <div style={{ textAlign: "center", padding: "20px", color: "#555", fontSize: 14 }}>No order history</div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  // ═══════════════════════════════════════
-  // AI AGENT SCREEN (NEW)
-  // ═══════════════════════════════════════
-  const AgentScreen = () => {
-    const [localSettings, setLocalSettings] = useState(agentSettings);
-    const [localEnabled, setLocalEnabled] = useState(agentEnabled);
-    const AGENT_LOGS = [
-      { time: "22:01", action: "Bought 0.3 SOL $BONK", reason: "alphahunter signal · WR 81%", color: GREEN, icon: "⚡" },
-      { time: "20:45", action: "Sold $RUGG (stop loss hit)", reason: "-30% → stop triggered at -30%", color: RED, icon: "🛑" },
-      { time: "19:22", action: "Skipped $SHILL call", reason: "MC $180K < min threshold $200K", color: "#555", icon: "⏭" },
-      { time: "18:10", action: "Bought 0.5 SOL $DEGEN", reason: "cryptokid.sol signal · WR 74%", color: GREEN, icon: "⚡" },
-      { time: "15:33", action: "Skipped degenking call", reason: "WR 62% < min 65%", color: "#555", icon: "⏭" },
-    ];
-    const toggle = (key) => setLocalSettings(s => ({ ...s, [key]: !s[key] }));
-    const save = () => { setAgentSettings(localSettings); setAgentEnabled(localEnabled); showToast("✅ Agent settings saved"); navigate(() => setAgentOpen(false), "pop"); };
-    return (
-      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: "#0a0a0a" }}>
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", padding: "6px 10px", background: "#111", gap: 8, borderBottom: "0.5px solid #222" }}>
-          <div onClick={() => navigate(() => setAgentOpen(false), "pop")} style={{ cursor: "pointer", fontSize: 22, fontWeight: 300, padding: "0 4px", color: "#fff" }}>‹</div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>🤖 AI Agent</div>
-            <div style={{ fontSize: 12, color: localEnabled ? GREEN : "#555" }}>{localEnabled ? "● Active" : "○ Inactive"}</div>
-          </div>
-          <Toggle on={localEnabled} onChange={() => setLocalEnabled(e => !e)} />
-        </div>
-
-        <div style={{ flex: 1, overflowY: "auto" }}>
-          {/* Status card */}
-          <div style={{ margin: "10px 12px", background: "#111", borderRadius: 14, padding: "14px", border: `1px solid ${localEnabled?"#1a4a1a":"#222"}` }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div style={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>Today's Activity</div>
-              <span style={{ fontSize: 12, color: GREEN }}>4 trades</span>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-              {[["Deployed","1.6 SOL","#fff"],["Realized","+$42","#34C759"],["Win Rate","75%","#34C759"]].map(([l,v,c]) => (
-                <div key={l} style={{ background: "#1a1a1a", borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
-                  <div style={{ fontSize: 10, color: "#555" }}>{l}</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: c, marginTop: 2 }}>{v}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Settings */}
-          <div style={{ margin: "0 12px 8px", fontSize: 12, color: "#555", fontWeight: 600, letterSpacing: 0.5, padding: "4px 0" }}>TRADE SETTINGS</div>
-          <div style={{ margin: "0 12px 10px", background: "#111", borderRadius: 14, overflow: "hidden" }}>
-            {[
-              { key: "autoTrade", label: "Auto Trade on Caller Signal", sub: "Execute trades automatically" },
-              { key: "followCallers", label: "Follow Tracked Callers Only", sub: "Only trade callers you follow" },
-              { key: "perpEnabled", label: "Enable Perp Trading", sub: "Agent can open perp positions" },
-            ].map((item, i) => (
-              <div key={item.key} style={{ display: "flex", alignItems: "center", padding: "12px 14px", borderTop: i?"0.5px solid #1a1a1a":"none" }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 15, color: "#fff" }}>{item.label}</div>
-                  <div style={{ fontSize: 12, color: "#555", marginTop: 1 }}>{item.sub}</div>
-                </div>
-                <Toggle on={localSettings[item.key]} onChange={() => toggle(item.key)} />
-              </div>
-            ))}
-          </div>
-
-          <div style={{ margin: "0 12px 8px", fontSize: 12, color: "#555", fontWeight: 600, letterSpacing: 0.5, padding: "4px 0" }}>RISK LIMITS</div>
-          <div style={{ margin: "0 12px 10px", background: "#111", borderRadius: 14, overflow: "hidden" }}>
-            {[
-              { label: "Max SOL per Call", key: "maxPerCall", unit: "SOL", opts: ["0.1","0.3","0.5","1","2"] },
-              { label: "Min Caller Win Rate", key: "minWR", unit: "%", opts: ["50","60","65","70","80"] },
-              { label: "Take Profit", key: "tpPct", unit: "%", opts: ["30","50","100","200"] },
-              { label: "Stop Loss", key: "slPct", unit: "%", opts: ["15","20","30","50"] },
-            ].map((item, i) => (
-              <div key={item.key} style={{ padding: "12px 14px", borderTop: i?"0.5px solid #1a1a1a":"none" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                  <span style={{ fontSize: 14, color: "#fff" }}>{item.label}</span>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: TG }}>{localSettings[item.key]} {item.unit}</span>
-                </div>
-                <div style={{ display: "flex", gap: 6 }}>
-                  {item.opts.map(o => (
-                    <div key={o} onClick={() => setLocalSettings(s => ({...s, [item.key]: o}))} style={{ flex: 1, textAlign: "center", padding: "6px 0", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", background: localSettings[item.key]===o?TG:"#1a1a1a", color: localSettings[item.key]===o?"#fff":"#555", border: `1px solid ${localSettings[item.key]===o?TG:"#333"}` }}>{o}</div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Agent log */}
-          <div style={{ margin: "0 12px 8px", fontSize: 12, color: "#555", fontWeight: 600, letterSpacing: 0.5, padding: "4px 0" }}>AGENT LOG</div>
-          <div style={{ margin: "0 12px 10px", background: "#111", borderRadius: 14, overflow: "hidden" }}>
-            {AGENT_LOGS.map((log, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 14px", borderTop: i?"0.5px solid #1a1a1a":"none" }}>
-                <div style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{log.icon}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, color: log.color, fontWeight: 500 }}>{log.action}</div>
-                  <div style={{ fontSize: 12, color: "#555", marginTop: 2 }}>{log.reason}</div>
-                </div>
-                <div style={{ fontSize: 11, color: "#444", flexShrink: 0 }}>{log.time}</div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ padding: "0 12px 16px" }}>
-            <div onClick={save} style={{ padding: "14px", borderRadius: 12, textAlign: "center", fontWeight: 700, fontSize: 16, cursor: "pointer", background: localEnabled?"linear-gradient(135deg,#00C853,#007A33)":"#1a1a1a", color: localEnabled?"#fff":"#555" }}>
-              {localEnabled ? "💾 Save & Activate Agent" : "💾 Save Settings"}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // ═══════════════════════════════════════
-  // NOTIFICATION SCREEN (NEW)
-  // ═══════════════════════════════════════
-  const NotifScreen = () => {
-    const filters = ["all","trade","caller","alert","agent"];
-    const filtered = notifFilter === "all" ? NOTIFICATIONS : NOTIFICATIONS.filter(n => n.type === notifFilter);
-    return (
-      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: BG }}>
-        <div style={{ display: "flex", alignItems: "center", padding: "6px 10px", background: TG, color: "#fff", gap: 8 }}>
-          <div onClick={() => navigate(() => setNotifOpen(false), "pop")} style={{ cursor: "pointer", fontSize: 22, fontWeight: 300, padding: "0 4px" }}>‹</div>
-          <div style={{ flex: 1, fontWeight: 600, fontSize: 16 }}>Notifications</div>
-          <span style={{ fontSize: 13, opacity: 0.8, cursor: "pointer" }}>Mark all read</span>
-        </div>
-        {/* Filter tabs */}
-        <div style={{ display: "flex", background: "#fff", borderBottom: "0.5px solid #E5E5EA", overflowX: "auto" }}>
-          {filters.map(f => (
-            <div key={f} onClick={() => setNotifFilter(f)} style={{ flexShrink: 0, padding: "8px 14px", fontSize: 13, fontWeight: notifFilter===f?600:400, color: notifFilter===f?TG:"#8E8E93", borderBottom: notifFilter===f?`2px solid ${TG}`:"none", cursor: "pointer", textTransform: "capitalize" }}>{f}</div>
-          ))}
-        </div>
-        {/* Unread count */}
-        {filtered.filter(n=>!n.read).length > 0 && (
-          <div style={{ padding: "8px 16px 4px", fontSize: 12, color: "#8E8E93", fontWeight: 500 }}>{filtered.filter(n=>!n.read).length} UNREAD</div>
+function TokenDetailScreen({ token, onBack, onBuy, onOpenCallMessage, onOpenCaller }) {
+  const [tab, setTab] = useState("Calls");
+  const positive = token.change.startsWith("+");
+  return (
+    <main className="token-screen">
+      <TokenTopBar token={token} onBack={onBack} compact={tab !== "Calls"} />
+      <div className={`token-scroll ${tab === "About" ? "about-mode" : ""}`}>
+        {tab === "Calls" ? (
+          <>
+            <section className="token-price-hero">
+              <div><strong className="mono">{token.price}</strong><span className={`mono ${positive ? "up" : "down"}`}>{positive ? "▲" : "▼"} {token.change.replace("+", "")} <em>Past hour</em></span></div>
+              <div><strong className="mono">{token.mc}</strong><span>Market cap</span></div>
+            </section>
+            <TokenLineChart token={token} showCallers onOpenCaller={onOpenCaller} />
+          </>
+        ) : (
+          <TokenLineChart token={token} compact />
         )}
-        <div style={{ flex: 1, overflowY: "auto" }}>
-          {filtered.map((notif, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 16px", background: notif.read?"#fff":"#F0F8FF", borderBottom: "0.5px solid #E5E5EA" }}>
-              <div style={{ width: 42, height: 42, borderRadius: 21, background: notif.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{notif.icon}</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: "#000" }}>{notif.title}</div>
-                  <div style={{ fontSize: 12, color: "#8E8E93", flexShrink: 0, marginLeft: 8 }}>{notif.time}</div>
-                </div>
-                <div style={{ fontSize: 14, color: "#444", marginTop: 2 }}>{notif.msg}</div>
-                {notif.type === "caller" && (
-                  <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                    <div onClick={() => navigate(() => { setTradeToken("SHILL"); setDiscoveryOpen(false); setNotifOpen(false); showToast("⚡ Opening trade..."); })} style={{ padding: "5px 12px", borderRadius: 8, background: TG, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>⚡ Trade</div>
-                    <div style={{ padding: "5px 12px", borderRadius: 8, background: "#F2F2F7", color: "#666", fontSize: 12, cursor: "pointer" }}>View Call</div>
-                  </div>
-                )}
-                {!notif.read && <div style={{ width: 8, height: 8, borderRadius: 4, background: TG, position: "absolute", right: 16 }}/>}
-              </div>
-            </div>
-          ))}
-        </div>
-        {/* Alert settings quick link */}
-        <div style={{ padding: "10px 16px", borderTop: "0.5px solid #E5E5EA", background: "#fff" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TG} strokeWidth="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4"/></svg>
-            <span style={{ fontSize: 15, color: TG }}>Alert Settings</span>
-            <div style={{ flex: 1 }} />
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C7C7CC" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
-          </div>
-        </div>
+        <TokenTimeframes />
+        <TokenTabBar active={tab} onChange={setTab} />
+        {tab === "Calls" ? (
+          <section className="token-calls-list">
+            {CALLERS.map((caller, index) => <TokenCallRow key={caller.name} caller={caller} token={token} index={index} onOpen={onOpenCallMessage} />)}
+          </section>
+        ) : <TokenAboutContent token={token} />}
       </div>
-    );
-  };
+      <button className="token-buy-cta" type="button" onClick={onBuy}>Buy</button>
+    </main>
+  );
+}
 
-  // ═══════════════════════════════════════
-  // DISCOVERY / SEARCH SCREEN (NEW)
-  // ═══════════════════════════════════════
-  const DiscoveryScreen = () => {
-    const filtered = searchQuery ? TRENDING_TOKENS.filter(t => t.token.toLowerCase().includes(searchQuery.toLowerCase()) || t.name.toLowerCase().includes(searchQuery.toLowerCase())) : TRENDING_TOKENS;
-    return (
-      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: BG }}>
-        <div style={{ display: "flex", alignItems: "center", padding: "6px 10px", background: TG, color: "#fff", gap: 8 }}>
-          <div onClick={() => navigate(() => setDiscoveryOpen(false), "pop")} style={{ cursor: "pointer", fontSize: 22, fontWeight: 300, padding: "0 4px" }}>‹</div>
-          <div style={{ flex: 1, fontWeight: 600, fontSize: 16 }}>🔍 Discover</div>
-        </div>
-        {/* Search bar */}
-        <div style={{ padding: "8px 12px", background: "#fff", borderBottom: "0.5px solid #E5E5EA" }}>
-          <div style={{ background: "#F2F2F7", borderRadius: 10, padding: "8px 12px", display: "flex", alignItems: "center", gap: 6 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-            <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Search tokens, callers..." style={{ border: "none", background: "transparent", fontSize: 15, color: "#000", outline: "none", flex: 1 }} />
-            {searchQuery && <span onClick={()=>setSearchQuery("")} style={{ color: "#8E8E93", cursor: "pointer" }}>✕</span>}
-          </div>
-        </div>
-        {/* Tabs */}
-        {!searchQuery && (
-          <div style={{ display: "flex", background: "#fff", borderBottom: "0.5px solid #E5E5EA" }}>
-            {["trending","new","top","watchlist"].map(t => (
-              <div key={t} onClick={() => setDiscoveryTab(t)} style={{ flex: 1, textAlign: "center", padding: "8px", fontSize: 13, fontWeight: discoveryTab===t?600:400, color: discoveryTab===t?TG:"#8E8E93", borderBottom: discoveryTab===t?`2px solid ${TG}`:"none", cursor: "pointer", textTransform: "capitalize" }}>{t}</div>
-            ))}
-          </div>
-        )}
-        <div style={{ flex: 1, overflowY: "auto" }}>
-          {!searchQuery && (
-            /* Hot alert banner */
-            <div style={{ margin: "10px 12px 0", background: "linear-gradient(135deg,#FF6D00,#FFD600)", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 24 }}>🔥</span>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 15, color: "#fff" }}>$MOON just hit +1,240%</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.8)" }}>31 members from your groups bought</div>
-              </div>
-            </div>
-          )}
-          {/* Token list */}
-          <div style={{ padding: "10px 12px" }}>
-            {!searchQuery && <div style={{ fontSize: 12, color: "#8E8E93", fontWeight: 600, marginBottom: 8, letterSpacing: 0.5 }}>{discoveryTab.toUpperCase()} TOKENS</div>}
-            {filtered.map((tk, i) => (
-              <div key={i} onClick={() => navigate(() => { setTradeToken(tk.token); setDiscoveryOpen(false); })} style={{ background: "#fff", borderRadius: 12, padding: "12px", marginBottom: 6, display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
-                <div style={{ position: "relative" }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 22, background: tk.c, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, color: "#fff" }}>{tk.token[1]}</div>
-                  {tk.hot && <div style={{ position: "absolute", top: -2, right: -2, fontSize: 12 }}>🔥</div>}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontWeight: 700, fontSize: 16, color: "#000" }}>{tk.token}</span>
-                    <span style={{ fontSize: 12, color: tk.change.startsWith("+")?GREEN:RED, fontWeight: 600 }}>{tk.change}</span>
-                  </div>
-                  <div style={{ fontSize: 12, color: "#8E8E93", marginTop: 1 }}>MC {tk.mc} · Vol {tk.vol}</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3 }}>
-                    <div style={{ display: "flex" }}>
-                      {[...Array(Math.min(tk.calls, 4))].map((_,j) => (
-                        <div key={j} style={{ width: 16, height: 16, borderRadius: 8, background: ["#D84315","#7C4DFF","#00838F","#FF6D00"][j%4], border: "1.5px solid #fff", marginLeft: j?-4:0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, color: "#fff", fontWeight: 700 }}>{["C","A","W","D"][j]}</div>
-                      ))}
-                    </div>
-                    <span style={{ fontSize: 12, color: "#8E8E93" }}>{tk.calls} callers</span>
-                  </div>
-                </div>
-                <div style={{ textAlign: "right", display: "flex", flexDirection: "column", gap: 4 }}>
-                  <div style={{ padding: "5px 10px", borderRadius: 8, background: TG, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Trade</div>
-                  <div onClick={(e) => { e.stopPropagation(); goToCall(tk.token==="$DEGEN"?"call1":tk.token==="$SHILL"?"call2":tk.token==="$PUMP"?"call3":"call1"); }} style={{ padding: "4px 10px", borderRadius: 8, background: "rgba(0,0,0,0.05)", color: TG, fontSize: 11, fontWeight: 500, cursor: "pointer", textAlign: "center" }}>View</div>
-                </div>
-              </div>
-            ))}
-            {filtered.length === 0 && (
-              <div style={{ textAlign: "center", padding: "40px", color: "#8E8E93" }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>🔍</div>
-                <div style={{ fontSize: 16 }}>No tokens found</div>
-              </div>
-            )}
-          </div>
-          {/* Callers section */}
-          {!searchQuery && discoveryTab === "trending" && (
-            <div style={{ padding: "0 12px 16px" }}>
-              <div style={{ fontSize: 12, color: "#8E8E93", fontWeight: 600, marginBottom: 8, letterSpacing: 0.5 }}>HOT CALLERS</div>
-              {CALLERS.slice(0,3).map((c, i) => (
-                <div key={i} onClick={() => navigate(() => setCallerIdx(i))} style={{ background: "#fff", borderRadius: 12, padding: "12px", marginBottom: 6, display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 20, background: c.c, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 16 }}>{c.name[0].toUpperCase()}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: 15, color: "#000" }}>{c.name}</div>
-                    <div style={{ fontSize: 12, color: "#8E8E93" }}>WR {c.wr} · {c.calls} calls · {c.followers} followers</div>
-                  </div>
-                  <div onClick={(e) => { e.stopPropagation(); toggleAlerts(i); }} style={{ padding: "6px 12px", borderRadius: 8, background: alertedCallers[i]?"#F2F2F7":TG, color: alertedCallers[i]?TG:"#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", border: alertedCallers[i]?`1px solid ${TG}`:"none" }}>
-                    {alertedCallers[i]?"✓ Alerts":"+Alerts"}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    );
+function TradeAmountScreen({ token, onBack }) {
+  const [amount, setAmount] = useState("");
+  const [bought, setBought] = useState(false);
+  const addDigit = (digit) => {
+    setAmount((current) => {
+      if (digit === "." && current.includes(".")) return current;
+      if (current === "0" && digit !== ".") return digit;
+      return `${current}${digit}`;
+    });
   };
-
-  // ═══════════════════════════════════════
-  // LEADERBOARD SCREEN
-  // ═══════════════════════════════════════
-  const LeaderboardScreen = () => {
-    const GROUPS = [
-      { name: "CAVE Alpha Group", members: "1,247", callers: 12, avgWr: "71%", pnl: "+$284K", emoji: "🐋", bg: "linear-gradient(135deg,#7B68EE,#00C853)", rank: 1, volume: "$8.4M" },
-      { name: "AlphaDAO", members: "3,420", callers: 24, avgWr: "65%", pnl: "+$190K", emoji: "🏴", bg: "linear-gradient(135deg,#FF6D00,#FFD600)", rank: 2, volume: "$12.1M" },
-      { name: "Solana Builders", members: "8,900", callers: 8, avgWr: "78%", pnl: "+$142K", emoji: "◎", bg: "linear-gradient(135deg,#9945FF,#14F195)", rank: 3, volume: "$6.2M" },
-      { name: "DeFi Alpha", members: "2,100", callers: 15, avgWr: "62%", pnl: "+$98K", emoji: "💎", bg: "linear-gradient(135deg,#00BCD4,#7C4DFF)", rank: 4, volume: "$4.8M" },
-      { name: "MetaDAO Signals", members: "940", callers: 6, avgWr: "59%", pnl: "+$44K", emoji: "🦾", bg: "linear-gradient(135deg,#FF2D55,#FF9500)", rank: 5, volume: "$2.1M" },
-    ];
-    const rankColors = ["#FFD700","#C0C0C0","#CD7F32","#8E8E93","#8E8E93"];
-    const [lbTab, setLbTab] = useState("groups");
+  const removeDigit = () => setAmount((current) => current.slice(0, -1));
+  if (bought) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: T.bg3 }}>
-        <div style={{ display: "flex", alignItems: "center", padding: "8px 16px 6px", background: T.headerBg, borderBottom: `0.5px solid ${T.border}` }}>
-          <div onClick={() => navigate(() => setLeaderboardOpen(false), "pop")} style={{ cursor: "pointer", fontSize: 17, color: TG, marginRight: 8, padding: "2px 4px" }}>‹</div>
-          <span style={{ fontSize: 17, fontWeight: 600, color: T.text, flex: 1, textAlign: "center" }}>Leaderboard</span>
-          <div style={{ width: 40 }} />
+      <main className="trade-amount-screen trade-complete-screen">
+        <button className="trade-complete-back" type="button" onClick={onBack}>Back</button>
+        <div className="trade-complete-message">
+          <TokenAvatar token={token} size="md" />
+          <h1>Swapped for {token.ticker}</h1>
         </div>
-        {/* Tabs */}
-        <div style={{ display: "flex", background: T.headerBg, borderBottom: `0.5px solid ${T.border}` }}>
-          {["groups","callers"].map(t => (
-            <div key={t} onClick={() => setLbTab(t)} style={{ flex: 1, textAlign: "center", padding: "10px", fontSize: 14, fontWeight: lbTab===t?600:400, color: lbTab===t?TG:T.text2, borderBottom: lbTab===t?`2px solid ${TG}`:"2px solid transparent", cursor: "pointer", textTransform: "capitalize" }}>{t === "groups" ? "Alpha Groups" : "Top Callers"}</div>
-          ))}
-        </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px" }}>
-          {lbTab === "groups" ? (
-            <>
-              {/* Podium top 3 */}
-              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 10, marginBottom: 20, padding: "0 8px" }}>
-                {[GROUPS[1], GROUPS[0], GROUPS[2]].map((g, pi) => {
-                  const heights = [90, 110, 70];
-                  const rnks = [2,1,3];
-                  return (
-                    <div key={g.rank} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-                      <div style={{ width: 46, height: 46, borderRadius: 23, background: g.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, border: `2px solid ${rankColors[rnks[pi]-1]}`, boxShadow: `0 0 12px ${rnks[pi]===1?"rgba(255,215,0,0.4)":"rgba(0,0,0,0.15)"}` }}>{g.emoji}</div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: T.text, textAlign: "center", maxWidth: 70, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name.split(" ")[0]}</div>
-                      <div style={{ width: "100%", height: heights[pi], borderRadius: "6px 6px 0 0", background: rnks[pi]===1?"linear-gradient(180deg,#FFD700,#FF9500)":rnks[pi]===2?"linear-gradient(180deg,#C0C0C0,#9E9E9E)":"linear-gradient(180deg,#CD7F32,#8D4E00)", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 8 }}>
-                        <span style={{ fontSize: 20, fontWeight: 900, color: "#fff" }}>#{rnks[pi]}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              {/* Full list */}
-              {GROUPS.map((g, i) => (
-                <div key={i} onClick={() => goChat(g.name)} style={{ background: T.card, borderRadius: 14, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", boxShadow: isDark?"none":"0 1px 4px rgba(0,0,0,0.07)", border: i===0?`1px solid rgba(255,215,0,0.3)`:"none" }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: rankColors[i], width: 24, textAlign: "center", flexShrink: 0 }}>#{g.rank}</div>
-                  <div style={{ width: 42, height: 42, borderRadius: 21, background: g.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{g.emoji}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 15, color: T.text }}>{g.name}</div>
-                    <div style={{ fontSize: 12, color: T.text2, marginTop: 1 }}>{g.members} members · WR {g.avgWr} · Vol {g.volume}</div>
-                  </div>
-                  <div style={{ textAlign: "right", flexShrink: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: GREEN }}>{g.pnl}</div>
-                    <div style={{ fontSize: 11, color: T.text2 }}>{g.callers} callers</div>
-                  </div>
-                </div>
-              ))}
-            </>
-          ) : (
-            <>
-              {CALLERS.map((c, i) => (
-                <div key={i} onClick={() => navigate(() => setCallerIdx(i))} style={{ background: T.card, borderRadius: 14, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", boxShadow: isDark?"none":"0 1px 4px rgba(0,0,0,0.07)", border: i===0?`1px solid rgba(255,215,0,0.3)`:"none" }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: rankColors[i], width: 24, textAlign: "center", flexShrink: 0 }}>#{i+1}</div>
-                  <div style={{ width: 42, height: 42, borderRadius: 21, background: c.c, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 18, flexShrink: 0 }}>{c.name[0].toUpperCase()}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 15, color: T.text }}>{c.name}</div>
-                    <div style={{ fontSize: 12, color: T.text2, marginTop: 1 }}>WR {c.wr} · Avg {c.avg} · {c.calls} calls</div>
-                    <div style={{ marginTop: 4 }}><WinLossBar wins={c.wins} losses={c.losses} /></div>
-                  </div>
-                  <div style={{ textAlign: "right", flexShrink: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: GREEN }}>{c.pnl}</div>
-                    <div style={{ fontSize: 11, color: T.text2 }}>{c.followers} followers</div>
-                  </div>
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-      </div>
+      </main>
     );
-  };
-
-  // ═══════════════════════════════════════
-  // CONTACTS
-  // ═══════════════════════════════════════
-  const ContactsScreen = () => {
-    return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: T.bg }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 16px 4px", background: T.headerBg }}>
-        <div style={{ fontSize: 17, padding: "6px 14px", background: T.bg2, borderRadius: 18, color: T.text }}>Sort</div>
-        <span style={{ fontSize: 17, fontWeight: 600, color: T.text }}>Contacts</span>
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={TG} strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
+  }
+  return (
+    <main className="trade-amount-screen">
+      <button className="trade-sheet-handle" type="button" onClick={onBack} aria-label="Back to token" />
+      <header className="trade-amount-header">
+        <div><TokenAvatar token={token} size="sm" /><span><strong>{token.ticker.replace("$", "")}</strong><small>{token.mc} MC</small></span></div>
+        <div><strong className="mono">{token.price}</strong><small className={`mono ${token.change.startsWith("+") ? "up" : "down"}`}>{token.change.startsWith("+") ? "▲" : "▼"} {token.change.replace("+", "")}</small></div>
+      </header>
+      <output className={`trade-amount-value mono ${amount ? "has-value" : ""}`}>{bought ? "Bought" : `$${amount || "0"}`}</output>
+      <div className="quick-percent-row">
+        {["10%", "25%", "50%", "Max"].map((item) => <button key={item} type="button" onClick={() => setAmount(item === "Max" ? "2.81" : String((2.81 * parseInt(item, 10) / 100).toFixed(2)))}>{item}</button>)}
       </div>
-      <div style={{ padding: "4px 16px 6px", background: T.headerBg }}>
-        <div style={{ background: T.searchBg, borderRadius: 10, padding: "8px 12px", display: "flex", alignItems: "center", gap: 6 }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.text2} strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-          <span style={{ fontSize: 16, color: T.text2 }}>Search</span>
+      <div className="number-pad">
+        {["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0"].map((item) => <button key={item} type="button" onClick={() => addDigit(item)}>{item}</button>)}
+        <button type="button" className="backspace-key" onClick={removeDigit} aria-label="Delete"><Icon name="x" size={26} /></button>
+      </div>
+      <div className="trade-footer-row">
+        <span>$2.81 available</span>
+        {amount ? <button type="button">$0.95 fee <Icon name="chevronDown" size={18} /></button> : <button type="button" aria-label="Select wallet"><Icon name="chevronDown" size={20} /></button>}
+      </div>
+      {amount ? (
+        <div className="slide-buy">
+          <span>»</span>
+          <strong>Slide to buy</strong>
+          <input type="range" min="0" max="100" defaultValue="0" aria-label="Slide to buy" onChange={(event) => { if (Number(event.target.value) > 82) setBought(true); }} />
         </div>
-      </div>
-      <div style={{ padding: "8px 16px", display: "flex", alignItems: "center", gap: 10, borderBottom: "0.5px solid #C6C6C830" }}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={TG} strokeWidth="1.5"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
-        <span style={{ fontSize: 17, color: TG }}>Invite Friends</span>
-      </div>
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", overscrollBehaviorY: "contain" }}>
-        {[
-          ["Alex | Superteam","4 min ago","#E91E63"],
-          ["Noah ⭐","6 min ago","#4CAF50"],
-          ["Ryan | Windfall Capital","57 min ago","#FF9800"],
-          ["SEN UHI","1 hour ago","#00BCD4"],
-          ["Mike Eidlin 🧿","1 hour ago","#9C27B0"],
-          ["cryptokid.sol","2 hours ago","#D84315"],
-          ["alphahunter","3 hours ago","#7C4DFF"],
-          ["whalemaster","4 hours ago","#00838F"],
-          ["Kate🚀","5 hours ago","#7B1FA2"],
-          ["pepelord","6 hours ago","#0277BD"],
-          ["solhunter.sol","8 hours ago","#E3A04F"],
-          ["ren","yesterday","#00695C"],
-          ["Connor","yesterday","#7C4DFF"],
-          ["Duke","2 days ago","#FF6D00"],
-          ["JK","3 days ago","#00838F"],
-          ["Max | PixeLAW","4 days ago","#FF2D55"],
-          ["David | Phantom","1 week ago","#5C6BC0"],
-          ["Anatoly Y.","1 week ago","#9945FF"],
-          ["Toly","2 weeks ago","#14F195"],
-          ["Mert | Helius","2 weeks ago","#FFC107"],
-        ].map(([n,t,c]) => (
-          <div key={n} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", borderBottom: `0.5px solid ${T.border}`, background: T.card }}>
-            <div style={{ width: 44, height: 44, borderRadius: 22, background: c, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 18 }}>{n[0]}</div>
-            <div><div style={{ fontSize: 16.5, fontWeight: 500, color: T.text }}>{n}</div><div style={{ fontSize: 14, color: "#8E8E93" }}>last seen {t}</div></div>
-          </div>
+      ) : (
+        <button className="enter-amount" type="button" disabled>Enter an amount</button>
+      )}
+    </main>
+  );
+}
+
+function TradeScreen({ token, onBack, onOpenCallMessage, onOpenCaller }) {
+  const [stage, setStage] = useState("token");
+  if (stage === "amount") return <TradeAmountScreen token={token} onBack={() => setStage("token")} />;
+  return <TokenDetailScreen token={token} onBack={onBack} onBuy={() => setStage("amount")} onOpenCallMessage={onOpenCallMessage} onOpenCaller={onOpenCaller} />;
+}
+
+function ProfileBackButton({ onBack }) {
+  return (
+    <button className="tg-profile-back" type="button" onClick={onBack} aria-label="Back">
+      <Icon name="back" size={34} />
+    </button>
+  );
+}
+
+function ProfileAction({ icon, label }) {
+  return (
+    <button className="tg-profile-action" type="button">
+      <Icon name={icon} size={30} />
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function CaveLogo() {
+  return (
+    <span className="cave-logo" aria-hidden="true">
+      <span className="cave-ghost"><i /><i /><i /></span>
+      <b>CAVE</b>
+    </span>
+  );
+}
+
+function GroupLogo({ chat }) {
+  if (chat.id === "cave") return <CaveLogo />;
+  return <Avatar label={chat.avatar} color={chat.color} size="lg" />;
+}
+
+function ProfileInfoCard({ children }) {
+  return <section className="tg-profile-info-card">{children}</section>;
+}
+
+function ProfileSegment({ items, active, onChange }) {
+  return (
+    <div className="tg-profile-segment">
+      {items.map((item) => (
+        <button key={item} type="button" className={active === item ? "active" : ""} onClick={() => onChange?.(item)}>
+          {item}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ProfileListRow({ avatar, color, title, meta, image, badge }) {
+  return (
+    <div className="tg-profile-list-row">
+      {image ? <Avatar label={title[0]} color={color} size="md" image={image} /> : <Avatar label={avatar} color={color} size="md" />}
+      <span>
+        <b>{title}</b>
+        <small className={meta === "online" ? "blue" : ""}>{meta}</small>
+      </span>
+      {badge ? <em>{badge}</em> : null}
+    </div>
+  );
+}
+
+function ProfilePerformancePanel({ caller }) {
+  const [alertsEnabled, setAlertsEnabled] = useState(false);
+  const stats = [
+    [caller.wr, "Win rate", "green"],
+    [caller.avg, "Avg return", "blue"],
+    [String(caller.calls), "Total calls", "black"],
+  ];
+  return (
+    <section className="profile-performance-card">
+      <button className={`profile-alert-button ${alertsEnabled ? "active" : ""}`} type="button" onClick={() => setAlertsEnabled((value) => !value)}>
+        {alertsEnabled ? "Alerts On" : "Get Alerts"}
+      </button>
+      {alertsEnabled ? <div className="profile-alert-state">You will be notified when {caller.name} posts a new call.</div> : null}
+      <div className="profile-stat-grid">
+        {stats.map(([value, label, color]) => (
+          <span key={label}>
+            <b className={`mono ${color}`}>{value}</b>
+            <small>{label}</small>
+          </span>
         ))}
       </div>
-    </div>
-  ); };
-
-  // ═══════════════════════════════════════
-  // CALLS (Screenshot-accurate)
-  // ═══════════════════════════════════════
-  const CallsScreen = () => {
-    const [callFilter, setCallFilter] = useState("All");
-    const callData = [
-      { name: "Ryan | Windfall Capital", sub: "Outgoing (8 sec)", date: "Mon", c: "#5C6BC0", type: "out", missed: false },
-      { name: "Alex | Superteam", sub: "Incoming (39 min)", date: "05/16/25", c: "#E91E63", type: "in", missed: false },
-      { name: "Connor", sub: "Outgoing, Incoming", date: "03/18/25", c: "#7C4DFF", type: "out", missed: false },
-      { name: "Duke +1", sub: "Missed", date: "03/17/25", c: "#FF6D00", type: "missed", missed: true },
-      { name: "Connor", sub: "Incoming (2 min)", date: "02/07/25", c: "#7C4DFF", type: "in", missed: false },
-      { name: "JK", sub: "Incoming (27 min)", date: "09/24/24", c: "#00838F", type: "in", missed: false },
-      { name: "JK", sub: "Incoming (1 min)", date: "09/24/24", c: "#00838F", type: "in", missed: false },
-      { name: "Max | PixeLAW", sub: "Outgoing, Incoming", date: "09/21/24", c: "#FF2D55", type: "out", missed: false },
-      { name: "Max | PixeLAW", sub: "Outgoing (11 min)", date: "09/21/24", c: "#FF2D55", type: "video", missed: false },
-      { name: "Max | PixeLAW", sub: "Outgoing, Incoming", date: "09/21/24", c: "#FF2D55", type: "out", missed: false },
-    ];
-    const filtered = callFilter === "Missed" ? callData.filter(c => c.missed) : callData;
-
-    // Arrow: small, left-aligned like Telegram screenshot
-    const Arrow = ({ type }) => {
-      // out = diagonal arrow pointing up-right (green), in = down-left (green), missed = up-right (red)
-      const color = type === "missed" ? RED : GREEN;
-      const d = type === "out"
-        ? "M7 17L17 7M17 7H9M17 7v8"   // ↗ outgoing
-        : type === "video"
-          ? "M7 17L17 7M17 7H9M17 7v8"
-          : "M17 7L7 17M7 17h8M7 17V9"; // ↙ incoming
-      return (
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d={d}/>
-        </svg>
-      );
-    };
-
-    const InfoBtn = () => (
-      <div style={{ width: 22, height: 22, borderRadius: 11, border: `1.5px solid ${TG}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={TG} strokeWidth="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+      <div className="profile-winloss">
+        <div><span>Win</span><b className="mono green">{caller.wins}</b></div>
+        <div><span>Loss</span><b className="mono red">{caller.losses}</b></div>
+        <i><em style={{ width: `${(caller.wins / (caller.wins + caller.losses)) * 100}%` }} /></i>
       </div>
-    );
-
-    return (
-      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: T.bg }}>
-        {/* Header — matches screenshot: Edit left, All|Missed center pill, empty right */}
-        <div style={{ display: "flex", alignItems: "center", padding: "8px 16px 8px", background: T.bg, gap: 0 }}>
-          <div style={{ fontSize: 16, padding: "5px 16px", background: T.bg2, borderRadius: 20, color: T.text, cursor: "pointer", fontWeight: 400 }}>Edit</div>
-          <div style={{ flex: 1, display: "flex", justifyContent: "center" }}>
-            <div style={{ display: "flex", background: T.bg2, borderRadius: 20, padding: 2 }}>
-              {["All","Missed"].map(f => (
-                <div key={f} onClick={() => setCallFilter(f)} style={{ padding: "5px 18px", fontSize: 15, fontWeight: callFilter===f?600:400, color: callFilter===f?T.text:T.text2, background: callFilter===f?T.card:"transparent", borderRadius: 18, cursor: "pointer", boxShadow: callFilter===f?"0 1px 3px rgba(0,0,0,0.15)":"none", transition: "all 0.15s" }}>{f}</div>
-              ))}
-            </div>
-          </div>
-          <div style={{ width: 60 }} />
+      <div className="profile-performance-chart">
+        <div className="performance-chart-head">
+          <span>Follower PnL · 30d</span>
+          <b className="mono green">{caller.pnl}</b>
         </div>
+        <Sparkline data={[100, 120, 115, 140, 180, 170, 210, 250, 240, 280, 320, 350, 340, 380]} color="#34C759" height={66} />
+      </div>
+    </section>
+  );
+}
 
-        <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-          {/* Start New Call — matches screenshot: phone icon left in TG blue, text right */}
-          <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 16px 10px", background: T.bg, borderBottom: `0.5px solid ${T.border}`, cursor: "pointer" }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={TG} strokeWidth="1.8" strokeLinecap="round">
-              <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.12 12.12 19.79 19.79 0 012.1 4.11 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91"/>
-              <line x1="17" y1="8" x2="17" y2="14"/><line x1="20" y1="11" x2="14" y2="11"/>
-            </svg>
-            <span style={{ fontSize: 17, color: TG, fontWeight: 400 }}>Start New Call</span>
-          </div>
+function CallerCallsPanel({ caller }) {
+  return (
+    <section className="tg-profile-list-card profile-tab-panel">
+      {CALLER_CALL_HISTORY.map(([ticker, from, to, time, change, token]) => (
+        <div className="profile-call-entry" key={`${ticker}-${time}`}>
+          <Avatar label={token.ticker[1]} color={token.color} size="sm" />
+          <span>
+            <b>{ticker}</b>
+            <small>called at <em className="mono">{from}→{to} MC</em></small>
+          </span>
+          <span className="profile-entry-result">
+            <strong className={`mono ${change.startsWith("+") ? "green" : "red"}`}>{change}</strong>
+            <small>{time}</small>
+          </span>
+        </div>
+      ))}
+    </section>
+  );
+}
 
-          {/* Section label */}
-          <div style={{ fontSize: 13, color: T.text2, padding: "10px 16px 2px", fontWeight: 400, letterSpacing: 0.3 }}>RECENT CALLS</div>
+function CallerTradesPanel() {
+  return (
+    <section className="tg-profile-list-card profile-tab-panel">
+      {CALLER_TRADE_HISTORY.map(([ticker, name, pnl, percent, token]) => (
+        <div className="profile-trade-entry" key={ticker}>
+          <Avatar label={ticker[1]} color={token.color} size="sm" />
+          <span>
+            <b>{ticker}</b>
+            <small>{name}</small>
+          </span>
+          <span className="profile-entry-result">
+            <strong className={`mono ${pnl.startsWith("+") ? "green" : "red"}`}>{pnl}</strong>
+            <small className={percent.startsWith("+") ? "green" : "red"}>{percent}</small>
+          </span>
+        </div>
+      ))}
+    </section>
+  );
+}
 
-          {/* Rows */}
-          {filtered.map((c, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 0, padding: "8px 16px", background: T.bg }}>
-              {/* Small arrow — far left, same column as Telegram */}
-              <div style={{ width: 18, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <Arrow type={c.type} />
-              </div>
-              {/* Avatar */}
-              <div style={{ width: 46, height: 46, borderRadius: 23, background: c.c, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 17, flexShrink: 0, marginRight: 12 }}>{c.name[0]}</div>
-              {/* Name + sub — flex 1 */}
-              <div style={{ flex: 1, minWidth: 0, borderBottom: `0.5px solid ${T.border}`, paddingBottom: 8, paddingTop: 1 }}>
-                <div style={{ fontSize: 16, fontWeight: 400, color: c.missed ? RED : T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
-                <div style={{ fontSize: 13, color: T.text2, marginTop: 1 }}>{c.sub}</div>
-              </div>
-              {/* Date + ⓘ */}
-              <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 8, borderBottom: `0.5px solid ${T.border}`, paddingBottom: 8, paddingTop: 1 }}>
-                <span style={{ fontSize: 15, color: T.text2, flexShrink: 0 }}>{c.date}</span>
-                <InfoBtn />
-              </div>
-            </div>
+function CallerGroupsPanel() {
+  return (
+    <section className="tg-profile-list-card">
+      <ProfileListRow avatar="D" color="#86D477" title="daiko fb" meta="" />
+      <ProfileListRow avatar="C" color="#F7C76D" title="cave dev" meta="" />
+      <ProfileListRow avatar="C" color="#fff" title="CAVE" meta="" />
+      <ProfileListRow avatar="S" color="linear-gradient(135deg,#E0904D,#34C759)" title="Superteam Japan" meta="" />
+    </section>
+  );
+}
+
+function CallerPostsPanel() {
+  return (
+    <section className="tg-profile-list-card profile-tab-panel">
+      {["Watching low caps after lunch", "Shared $DEGEN thesis", "Reposted CAVE member note"].map((post, index) => (
+        <div className="profile-post-entry" key={post}>
+          <span>
+            <b>{post}</b>
+            <small>{index + 1}d ago · {index === 0 ? "12 replies" : index === 1 ? "38 reactions" : "saved"}</small>
+          </span>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function GroupPerformancePanel({ onOpenLeaderboard, profile = GROUP_PROFILES.cave }) {
+  return (
+    <section className="profile-performance-card group-performance">
+      <div className="profile-stat-grid">
+        {profile.stats.map(([value, label, color]) => (
+          <span key={label}>
+            <b className={`mono ${color}`}>{value}</b>
+            <small>{label}</small>
+          </span>
+        ))}
+      </div>
+      <div className="profile-performance-chart">
+        <div className="performance-chart-head">
+          <span>Group performance · 30d</span>
+          <b className="mono green">{profile.pnl}</b>
+        </div>
+        <Sparkline data={profile.chart} color="#34C759" height={66} />
+      </div>
+      <div className="group-performance-metrics">
+        {profile.metrics.slice(0, 2).map(([label, value]) => <span key={label}><small>{label}</small><b className="mono">{value}</b></span>)}
+        <span className="global-rank-metric">
+          <small>{profile.metrics[2][0]} <button type="button" onClick={onOpenLeaderboard} aria-label="Open global leaderboard">?</button></small>
+          <b className="mono">{profile.metrics[2][1]}</b>
+        </span>
+      </div>
+    </section>
+  );
+}
+
+function GroupCallersPanel({ openCaller }) {
+  return (
+    <section className="tg-profile-list-card">
+      {GROUP_CALLERS.map((caller) => (
+        <button className="tg-profile-list-row" type="button" key={caller.name} onClick={() => openCaller?.(caller)}>
+          <Avatar label={caller.name[0].toUpperCase()} color={caller.color} size="md" />
+          <span>
+            <b>{caller.name}</b>
+            <small className="mono">WR {caller.wr} · Avg {caller.avg}</small>
+          </span>
+          <em className="calls-count mono">{caller.wr}</em>
+        </button>
+      ))}
+    </section>
+  );
+}
+
+function GroupCallsPanel({ calls = GROUP_CALL_HISTORY }) {
+  return (
+    <section className="tg-profile-list-card group-calls-list">
+      {calls.map(([caller, ticker, mc, time, token]) => (
+        <div className="group-call-row" key={`${caller.name}-${ticker}-${time}`}>
+          <Avatar label={token.ticker[1]} color={token.color} size="sm" />
+          <span>
+            <b>{ticker}</b>
+            <small>called by {caller.name} · <em className="mono">{mc}</em> · {time}</small>
+          </span>
+          <strong className={`mono ${token.change.startsWith("+") ? "green" : "red"}`}>{token.change}</strong>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function GroupMembersPanel() {
+  return (
+    <section className="tg-profile-list-card">
+      <ProfileListRow avatar="A" color="#5E7C5E" title="asuma | Daiko AI ★" meta="last seen 2 hours ago" />
+      <ProfileListRow avatar="Y" color="#F7D9C6" title="Yuki | Daiko" meta="online" image={chatsBg} />
+      <ProfileListRow avatar="K" color="linear-gradient(180deg,#83D2F8,#4399E8)" title="Kazuki 🪁" meta="last seen a long time ago" />
+      <ProfileListRow avatar="S" color="#E8B7D8" title="Stray Ebi 🐬" meta="last seen 2 minutes ago" />
+      <ProfileListRow avatar="S" color="#8AA8FF" title="🐸 Senshi" meta="" badge="admin" />
+    </section>
+  );
+}
+
+function EmptyProfilePanel() {
+  return <section className="tg-profile-list-card profile-empty-panel" aria-label="Empty section" />;
+}
+
+function CallerProfile({ caller, onBack }) {
+  const [activeTab, setActiveTab] = useState("Calls");
+  const profile = { ...callerProfileDefaults(caller.name, caller.id), ...caller };
+  return (
+    <main className="tg-profile-screen caller-profile-screen">
+      <ProfileBackButton onBack={onBack} />
+      <section className="tg-profile-hero">
+        <Avatar label={profile.name[0].toUpperCase()} color={profile.color} size="lg" />
+        <h1>{profile.name}</h1>
+        <p>{profile.status}</p>
+      </section>
+      <div className="tg-profile-actions five">
+        <ProfileAction icon="chats" label="message" />
+        <ProfileAction icon="calls" label="call" />
+        <ProfileAction icon="grid" label="video" />
+        <ProfileAction icon="bell" label="mute" />
+        <ProfileAction icon="settings" label="more" />
+      </div>
+      <ProfileInfoCard>
+        <div className="tg-info-row qr-row"><span><b>username</b><a>{profile.username}</a></span><Icon name="grid" size={28} /></div>
+        <div className="tg-info-row"><span><b>birthday</b><strong>{profile.birthday}</strong></span></div>
+        <button className="tg-info-link" type="button">Add to Contacts</button>
+        <button className="tg-info-link danger" type="button">Block User</button>
+      </ProfileInfoCard>
+      <ProfilePerformancePanel caller={caller} />
+      <ProfileSegment items={["Calls", "Trades", "Posts", "Groups"]} active={activeTab} onChange={setActiveTab} />
+      {activeTab === "Calls" ? <CallerCallsPanel caller={caller} /> : null}
+      {activeTab === "Trades" ? <CallerTradesPanel /> : null}
+      {activeTab === "Posts" ? <CallerPostsPanel /> : null}
+      {activeTab === "Groups" ? <CallerGroupsPanel /> : null}
+      <div className="bottom-spacer" />
+    </main>
+  );
+}
+
+function GroupProfile({ chat = CHATS[0], onBack, openCaller, openLeaderboard }) {
+  const profile = GROUP_PROFILES[chat.id] || GROUP_PROFILES.cave;
+  const [activeTab, setActiveTab] = useState(profile.tabs[0]);
+  useEffect(() => {
+    setActiveTab(profile.tabs[0]);
+  }, [profile.tabs]);
+  return (
+    <main className="tg-profile-screen group-profile-screen">
+      <ProfileBackButton onBack={onBack} />
+      <section className="tg-profile-hero group">
+        <GroupLogo chat={chat} />
+        <h1>{profile.title}</h1>
+        <p>{profile.subtitle}</p>
+      </section>
+      <div className="tg-profile-actions four">
+        <ProfileAction icon="bell" label="unmute" />
+        <ProfileAction icon="search" label="search" />
+        <ProfileAction icon="share" label="leave" />
+        <ProfileAction icon="settings" label="more" />
+      </div>
+      <ProfileInfoCard>
+        <div className="tg-info-row qr-row"><span><b>share link</b><a>{profile.link}</a></span><Icon name="grid" size={28} /></div>
+        <div className="tg-info-row"><span><b>description</b><strong>{profile.description}</strong></span></div>
+      </ProfileInfoCard>
+      <GroupPerformancePanel profile={profile} onOpenLeaderboard={openLeaderboard} />
+      <ProfileSegment items={profile.tabs} active={activeTab} onChange={setActiveTab} />
+      {activeTab === "Callers" ? <GroupCallersPanel openCaller={openCaller} /> : null}
+      {activeTab === "Calls" ? <GroupCallsPanel calls={profile.calls} /> : null}
+      {activeTab === "Members" ? <GroupMembersPanel /> : null}
+      {activeTab === "Media" || activeTab === "Saved" ? <EmptyProfilePanel /> : null}
+      <div className="bottom-spacer" />
+    </main>
+  );
+}
+
+function CallsScreen({ openCaller }) {
+  const [callTab, setCallTab] = useState("All");
+  return (
+    <>
+      <header className="calls-header">
+        <button className="pill nav-pill text-pill" type="button">Edit</button>
+        <HeaderSegment value={callTab} onChange={setCallTab} items={["All", "Missed"]} />
+        <span />
+      </header>
+      <main className="scroll-content telegram-page calls-page">
+        <Card className="plain-list calls-list">
+          <Row className="invite-row start-call-row">
+            <span className="invite-icon"><Icon name="calls" size={31} /></span>
+            <span>Start New Call</span>
+          </Row>
+          <SectionLabel>Recent calls</SectionLabel>
+          {RECENT_CALLS.map((call, index) => <CallRow key={`${call.name}-${index}`} call={call} />)}
+        </Card>
+        <div className="bottom-spacer" />
+      </main>
+    </>
+  );
+}
+
+function SettingsScreen({ openNotifications }) {
+  return (
+    <>
+      <main className="scroll-content telegram-page settings-page">
+        <div className="settings-profile">
+          <button className="settings-grid-button" type="button" aria-label="QR"><Icon name="grid" size={27} /></button>
+          <button className="settings-edit-button pill nav-pill text-pill" type="button" onClick={openNotifications}>Edit</button>
+          <Avatar label="Y" color="linear-gradient(135deg,#F7D9C6,#E8E4DC)" size="lg" image={chatsBg} />
+          <h1>Yuki | Daiko</h1>
+          <p>+81 80 9584 7088 - @zkyuki</p>
+        </div>
+        <Card className="settings-camera">
+          <Row className="invite-row">
+            <span className="invite-icon"><Icon name="camera" size={31} /></span>
+            <span>Change Profile Photo</span>
+          </Row>
+        </Card>
+        {SETTINGS_GROUPS.map((group, index) => (
+          <Card key={index} className="settings-group">
+            {group.map((item) => <SettingsRow key={item.label} item={item} />)}
+          </Card>
+        ))}
+        <div className="bottom-spacer" />
+      </main>
+    </>
+  );
+}
+
+function NotificationsScreen({ onBack }) {
+  return (
+    <>
+      <HomeHeader title="Notifications" onBack={onBack} onNotify={() => {}} />
+      <main className="scroll-content">
+        <SectionLabel>Today</SectionLabel>
+        <Card className="list-card">
+          {NOTIFICATIONS.map((item) => (
+            <Row key={item.title}>
+              <Avatar label={item.title[0]} color={item.color} size="sm" />
+              <span className="row-copy"><b>{item.title}</b><small>{item.body}</small></span>
+              <span className="mono subtle">{item.time}</span>
+            </Row>
+          ))}
+        </Card>
+      </main>
+    </>
+  );
+}
+
+function LeaderboardScreen({ onBack, openCaller }) {
+  const [period, setPeriod] = useState("1D");
+  const [kind, setKind] = useState("Callers");
+  const callerRows = [
+    ...CALLERS,
+    { name: "solanaSensei", wr: "69%", avg: "5.8x", pnl: "+$32.4K", calls: 78, wins: 54, losses: 24, color: U[6] },
+    { name: "pumpwatcher", wr: "66%", avg: "4.9x", pnl: "+$28.1K", calls: 91, wins: 60, losses: 31, color: U[7] },
+    { name: "perpTony", wr: "64%", avg: "3.7x", pnl: "+$24.8K", calls: 66, wins: 42, losses: 24, color: "#111" },
+    { name: "kalshiLin", wr: "61%", avg: "2.6x", pnl: "+$19.6K", calls: 58, wins: 35, losses: 23, color: U[5] },
+    { name: "memeMechanic", wr: "58%", avg: "3.1x", pnl: "+$15.2K", calls: 84, wins: 49, losses: 35, color: U[3] },
+    { name: "lowcapLily", wr: "55%", avg: "2.4x", pnl: "+$11.9K", calls: 73, wins: 40, losses: 33, color: U[2] },
+  ].slice(0, 10);
+  const rows = kind === "Callers" ? callerRows : GROUP_LEADERBOARD.map(([name, pnl, wr, avg, color]) => ({ name, pnl, wr, avg, color }));
+  return (
+    <main className="leaderboard-screen">
+      <header className="leaderboard-header">
+        <button className="pill nav-pill text-pill" type="button" onClick={onBack}>Back</button>
+        <strong>Leaderboard</strong>
+        <div className="leaderboard-period">
+          {["1D", "1W", "1M"].map((item) => (
+            <button key={item} type="button" className={period === item ? "active" : ""} onClick={() => setPeriod(item)}>{item}</button>
           ))}
         </div>
+      </header>
+      <div className="leaderboard-tabs">
+        {["Callers", "Groups"].map((item) => (
+          <button key={item} type="button" className={kind === item ? "active" : ""} onClick={() => setKind(item)}>{item}</button>
+        ))}
       </div>
-    );
+      <section className="tg-card leaderboard-list">
+        {rows.map((row, index) => (
+          <button className="leaderboard-row" type="button" key={row.name} onClick={() => kind === "Callers" && openCaller?.(row)}>
+            <span className={`leaderboard-rank mono rank-${index + 1}`}>{index + 1}</span>
+            <Avatar label={row.name[0].toUpperCase()} color={row.color} size="sm" />
+            <span>
+              <b>{row.name}</b>
+              <small className="mono">WR {row.wr} · Avg {row.avg}</small>
+            </span>
+            <strong className="mono green">{row.pnl}</strong>
+          </button>
+        ))}
+      </section>
+      <div className="bottom-spacer" />
+    </main>
+  );
+}
+
+function TabBar({ active, onTab }) {
+  const tabs = [
+    ["contacts", "Contacts", "user"],
+    ["calls", "Calls", "calls"],
+    ["chats", "Chats", "chats"],
+    ["home", "Home", "home"],
+    ["settings", "Settings", "settings"],
+  ];
+  return (
+    <nav className="tabbar-wrap">
+      <div className="tabbar-fade" />
+      <div className="tabbar-main">
+        {tabs.map(([id, label, icon]) => (
+          <button key={id} type="button" className={active === id ? "active" : ""} onClick={() => onTab(id)}>
+            <span className="tab-icon"><Icon name={icon} size={25} />{id === "chats" ? <b>9</b> : null}</span>
+            <span>{label}</span>
+          </button>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+export default function App() {
+  const [tab, setTab] = useState("chats");
+  const [view, setView] = useState(null);
+  const [selectedToken, setSelectedToken] = useState(TOKENS[0]);
+  const [selectedCaller, setSelectedCaller] = useState(CALLERS[0]);
+  const selectedChat = view?.type === "chat" || view?.type === "group" ? view.chat : CHATS[0];
+
+  const openTrade = (token) => {
+    setSelectedToken(typeof token === "object" && token?.ticker ? token : tokenBySymbol(token));
+    setView({ type: "trade" });
   };
-
-  // ═══════════════════════════════════════
-  // SETTINGS (Telegram iOS style)
-  // ═══════════════════════════════════════
-  const SettingsScreen = () => {
-    const SettingRow = ({ icon, iconBg, label, value, action, chevron=true, danger=false, isToggle=false, toggleVal=false, onToggle=null }) => (
-      <div onClick={action} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderBottom: `0.5px solid ${T.border}`, cursor: action||onToggle?"pointer":"default", background: T.card }}>
-        <div style={{ width: 30, height: 30, borderRadius: 8, background: iconBg||TG, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <span style={{ fontSize: 16 }}>{icon}</span>
-        </div>
-        <span style={{ fontSize: 16, color: danger?RED:T.text, flex: 1 }}>{label}</span>
-        {value && <span style={{ fontSize: 15, color: T.text2, marginRight: 4 }}>{value}</span>}
-        {isToggle && <Toggle on={toggleVal} onChange={onToggle} />}
-        {chevron && !isToggle && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={T.text3} strokeWidth="2.5"><path d="M9 18l6-6-6-6"/></svg>}
-      </div>
-    );
-    return (
-      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: T.bg3 }}>
-        {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 16px 6px", background: T.bg3 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 18, background: T.bg2, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TG} strokeWidth="1.5"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/><path d="M16 16h5M18.5 16v5M16 18.5h2.5"/></svg>
-          </div>
-          <span style={{ fontSize: 17, fontWeight: 600, color: T.text }}>Settings</span>
-          <div style={{ fontSize: 15, padding: "6px 14px", background: T.bg2, borderRadius: 18, color: T.text, cursor: "pointer" }}>Edit</div>
-        </div>
-        <div style={{ flex: 1, overflowY: "auto" }}>
-          {/* Profile card */}
-          <div style={{ background: T.card, margin: "8px 0 0", padding: "14px 16px", display: "flex", alignItems: "center", gap: 14, borderBottom: `0.5px solid ${T.border}` }}>
-            <div style={{ width: 62, height: 62, borderRadius: 31, background: "linear-gradient(135deg,#3390EC,#00C853)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, color: "#fff", fontWeight: 700, flexShrink: 0 }}>Y</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 19, fontWeight: 600, color: T.text }}>Alex</div>
-              <div style={{ fontSize: 14, color: T.text2, marginTop: 1 }}>+1 415 923 7042</div>
-              <div style={{ fontSize: 14, color: TG, marginTop: 1 }}>@alex</div>
-            </div>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.text3} strokeWidth="2.5"><path d="M9 18l6-6-6-6"/></svg>
-          </div>
-          {/* My Profile shortcuts */}
-          <div style={{ background: T.card, borderBottom: `0.5px solid ${T.border}` }}>
-            {[["😊","Change Emoji Status","#FF9500"],["🎨","Change Profile Color","#5856D6"],["📷","Change Profile Photo","#FF2D55"]].map(([ic,lb,bg],i) => (
-              <SettingRow key={lb} icon={ic} iconBg={bg} label={lb} />
-            ))}
-          </div>
-          {/* Section 1: Daiko features */}
-          <div style={{ background: T.card, margin: "8px 0 0", borderTop: `0.5px solid ${T.border}` }}>
-            <SettingRow icon="💰" iconBg="#30D158" label="Wallet" action={()=>navigate(()=>setPortfolioOpen(true))} />
-          </div>
-          {/* Section 2: Main settings */}
-          <div style={{ background: T.card, margin: "8px 0 0", borderTop: `0.5px solid ${T.border}` }}>
-            <SettingRow icon="🔔" iconBg="#FF3B30" label="Notifications and Sounds" action={()=>navigate(()=>setNotifOpen(true))} />
-            <SettingRow icon="🔒" iconBg="#636366" label="Privacy and Security" />
-            <SettingRow icon="💾" iconBg="#30D158" label="Data and Storage" />
-            <SettingRow icon="🌓" iconBg="#1C1C1E" label="Appearance" value={isDark?"Dark":"Light"} action={()=>setTheme(t=>t==="dark"?"light":"dark")} />
-            <SettingRow icon="⚡" iconBg="#FF9F0A" label="Power Saving" value="Off" />
-            <SettingRow icon="🌐" iconBg="#5856D6" label="Language" value="English" />
-          </div>
-          {/* Section 3: Premium */}
-          <div style={{ background: T.card, margin: "8px 0 0", borderTop: `0.5px solid ${T.border}` }}>
-            <SettingRow icon="⭐" iconBg="#BF5AF2" label="Telegram Premium" />
-            <SettingRow icon="⭐" iconBg="#FF9F0A" label="My Stars" />
-            <SettingRow icon="🏪" iconBg="#FF2D55" label="Telegram Business" />
-            <SettingRow icon="🎁" iconBg="#30D158" label="Send a Gift" />
-          </div>
-          {/* Section 4: Help */}
-          <div style={{ background: T.card, margin: "8px 0 0", borderTop: `0.5px solid ${T.border}` }}>
-            <SettingRow icon="💬" iconBg="#30D158" label="Ask a Question" />
-            <SettingRow icon="❓" iconBg="#0A84FF" label="Telegram FAQ" />
-            <SettingRow icon="💡" iconBg="#FF9F0A" label="Telegram Features" />
-          </div>
-          <div style={{ height: 20 }} />
-        </div>
-      </div>
-    );
+  const openCaller = (caller) => {
+    setSelectedCaller(caller);
+    setView({ type: "caller" });
   };
-
-  // ═══════════════════════════════════════
-  // AUTH SCREEN
-  // ═══════════════════════════════════════
-  const AuthScreen = () => {
-    const [phone, setPhone] = useState("");
-    const [code, setCode] = useState(["", "", "", "", ""]);
-    const [timer, setTimer] = useState(60);
-    const [timerActive, setTimerActive] = useState(false);
-    const codeRef0 = useRef(null);
-    const codeRef1 = useRef(null);
-    const codeRef2 = useRef(null);
-    const codeRef3 = useRef(null);
-    const codeRef4 = useRef(null);
-    const codeRefs = [codeRef0, codeRef1, codeRef2, codeRef3, codeRef4];
-
-    useEffect(() => {
-      if (!timerActive || timer <= 0) return;
-      const id = setTimeout(() => setTimer(t => t - 1), 1000);
-      return () => clearTimeout(id);
-    }, [timer, timerActive]);
-
-    const handleNext = () => {
-      if (phone.length < 7) return;
-      setAuthPhone(phone);
-      flushSync(() => setAuthStep("code"));
-      codeRef0.current?.focus();
-      setTimer(60);
-      setTimerActive(true);
-    };
-
-    const handleCodeChange = (idx, val) => {
-      if (!/^\d?$/.test(val)) return;
-      const next = [...code];
-      next[idx] = val;
-      setCode(next);
-      if (val && idx < 4) codeRefs[idx + 1].current?.focus();
-      if (next.every(d => d !== "")) {
-        setTimeout(() => completeAuth(), 150);
-      }
-    };
-
-    const handleCodeKeyDown = (idx, e) => {
-      if (e.key === "Backspace" && !code[idx] && idx > 0) {
-        codeRefs[idx - 1].current?.focus();
-      }
-    };
-
-    const completeAuth = () => {
-      navigate(() => {
-        setAuthenticated(true);
-        setTab("chats");
-      }, "push");
-    };
-
-    const resendCode = () => {
-      setTimer(60);
-      setTimerActive(true);
-      setCode(["", "", "", "", ""]);
-      codeRef0.current?.focus();
-    };
-
-    if (authStep === "phone") return (
-      <div
-        ref={el => { if (el) el.style.cssText += "; view-transition-name: screen;"; }}
-        style={{
-          display: "flex", flexDirection: "column",
-          height: "100%", background: "#fff",
-          paddingTop: "env(safe-area-inset-top, 44px)"
-        }}
-      >
-        <div style={{
-          flex: 1, display: "flex", flexDirection: "column",
-          alignItems: "center", justifyContent: "flex-start",
-          paddingTop: 60, paddingBottom: 24, paddingLeft: 24, paddingRight: 24
-        }}>
-          <div style={{
-            width: 100, height: 100, borderRadius: 50,
-            background: `linear-gradient(145deg, ${TG}, #2479D8)`,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            marginBottom: 20, boxShadow: `0 8px 32px rgba(51,144,236,0.35)`
-          }}>
-            <svg width="52" height="52" viewBox="0 0 24 24" fill="none">
-              <path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13"
-                stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: "#000", margin: "0 0 6px", textAlign: "center" }}>
-            Daikogram
-          </h1>
-          <p style={{ fontSize: 15, color: "#8E8E93", margin: "0 0 36px", textAlign: "center", lineHeight: 1.5 }}>
-            Please confirm your country code<br />and enter your phone number.
-          </p>
-          <div
-            onClick={() => showToast("🌐 Country selection coming soon")}
-            style={{
-              width: "100%", background: "#F2F2F7", borderRadius: 12,
-              padding: "14px 16px", marginBottom: 10,
-              display: "flex", alignItems: "center", gap: 12, cursor: "pointer"
-            }}
-          >
-            <span style={{ fontSize: 22 }}>🇯🇵</span>
-            <span style={{ fontSize: 16, color: "#000", flex: 1 }}>Japan</span>
-            <span style={{ fontSize: 16, color: "#8E8E93" }}>+81</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C7C7CC" strokeWidth="2.5">
-              <path d="M9 18l6-6-6-6"/>
-            </svg>
-          </div>
-          <div style={{
-            width: "100%", background: "#F2F2F7", borderRadius: 12,
-            padding: "14px 16px", marginBottom: 32,
-            display: "flex", alignItems: "center", gap: 8
-          }}>
-            <span style={{ fontSize: 16, color: TG, fontWeight: 600 }}>+81</span>
-            <div style={{ width: 1, height: 20, background: "#C7C7CC" }} />
-            <input
-              type="tel"
-              inputMode="numeric"
-              autoFocus
-              placeholder="Phone Number"
-              value={phone}
-              onChange={e => setPhone(e.target.value.replace(/\D/g, ""))}
-              style={{
-                border: "none", background: "transparent",
-                fontSize: 16, color: "#000", outline: "none",
-                flex: 1, letterSpacing: 0.5
-              }}
-            />
-          </div>
-          <div
-            onClick={handleNext}
-            style={{
-              width: "100%", padding: "15px", borderRadius: 12,
-              textAlign: "center", fontWeight: 700, fontSize: 16,
-              cursor: phone.length >= 7 ? "pointer" : "default",
-              background: phone.length >= 7 ? TG : "#C7C7CC",
-              color: "#fff", transition: "background 0.2s", userSelect: "none"
-            }}
-          >
-            Next
-          </div>
-        </div>
-        <div style={{ height: "env(safe-area-inset-bottom, 34px)" }} />
-      </div>
-    );
-
-    return (
-      <div
-        ref={el => { if (el) el.style.cssText += "; view-transition-name: screen;"; }}
-        style={{
-          display: "flex", flexDirection: "column",
-          height: "100%", background: "#fff",
-          paddingTop: "env(safe-area-inset-top, 44px)"
-        }}
-      >
-        <div style={{ padding: "8px 16px 0" }}>
-          <div
-            onClick={() => navigate(() => setAuthStep("phone"), "pop")}
-            style={{ fontSize: 28, color: TG, fontWeight: 300, cursor: "pointer", display: "inline-block" }}
-          >
-            ‹
-          </div>
-        </div>
-        <div style={{
-          flex: 1, display: "flex", flexDirection: "column",
-          alignItems: "center",
-          paddingTop: 40, paddingLeft: 24, paddingRight: 24
-        }}>
-          <div style={{
-            width: 80, height: 80, borderRadius: 40,
-            background: "#EBF3FE",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            marginBottom: 20
-          }}>
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
-              <path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13"
-                stroke={TG} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: "#000", margin: "0 0 6px", textAlign: "center" }}>
-            +81 {authPhone}
-          </h1>
-          <p style={{ fontSize: 15, color: "#8E8E93", margin: "0 0 36px", textAlign: "center", lineHeight: 1.5 }}>
-            We have sent you a message with the code<br />to the number above.
-          </p>
-          <div style={{ display: "flex", gap: 10, marginBottom: 32, justifyContent: "center" }}>
-            {code.map((digit, i) => (
-              <div key={i} style={{
-                width: 52, height: 56, borderRadius: 12,
-                background: "#F2F2F7",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                position: "relative",
-                border: digit ? `2px solid ${TG}` : "2px solid transparent",
-                transition: "border-color 0.15s"
-              }}>
-                <input
-                  ref={codeRefs[i]}
-                  type="tel"
-                  inputMode="numeric"
-                  maxLength={1}
-                  value={digit}
-                  onChange={e => handleCodeChange(i, e.target.value)}
-                  onKeyDown={e => handleCodeKeyDown(i, e)}
-                  style={{
-                    position: "absolute", inset: 0,
-                    border: "none", background: "transparent",
-                    textAlign: "center", fontSize: 22,
-                    fontWeight: 600, color: "#000",
-                    outline: "none", width: "100%", height: "100%",
-                    borderRadius: 12, caretColor: TG
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-          {timer > 0 ? (
-            <p style={{ fontSize: 14, color: "#8E8E93", textAlign: "center" }}>
-              Resend code in{" "}
-              <span style={{ color: TG, fontWeight: 600 }}>0:{String(timer).padStart(2, "0")}</span>
-            </p>
-          ) : (
-            <div
-              onClick={resendCode}
-              style={{ fontSize: 15, color: TG, fontWeight: 500, cursor: "pointer", textAlign: "center" }}
-            >
-              Resend Code
-            </div>
-          )}
-        </div>
-        <div style={{ height: "env(safe-area-inset-bottom, 34px)" }} />
-      </div>
-    );
+  const openCallMessage = (caller, token) => {
+    setView({ type: "chat", chat: CHATS[0], focusCallKey: `${caller.name}-${token.ticker}` });
   };
-
-  // ═══════════════════════════════════════
-  // MAIN RENDER
-  // ═══════════════════════════════════════
-  const renderContent = () => {
-    if (leaderboardOpen) return <LeaderboardScreen />;
-    if (discoveryOpen) return <DiscoveryScreen />;
-    if (notifOpen) return <NotifScreen />;
-    if (agentOpen) return <AgentScreen />;
-    if (perpOpen) return <PerpTradeScreen />;
-    if (portfolioOpen) return <PortfolioScreen />;
-    if (callerIdx >= 0) return <CallerProfile />;
-    if (tradeToken) return <TradeScreen />;
-    if (profileOpen === "group") return <GroupProfile />;
-    if (chatOpen && chatOpen !== "daikogram_caller") return <ChatView />;
-    switch (tab) {
-      case "contacts": return <ContactsScreen />;
-      case "calls": return <CallsScreen />;
-      case "chats": return <ChatsListScreen />;
-      case "home": return <DaikogramScreen />;
-      case "settings": return <SettingsScreen />;
+  const closeView = () => setView(null);
+  const switchTab = (nextTab) => {
+    if (nextTab === "discover") {
+      setView({ type: "discover" });
+      return;
     }
+    setTab(nextTab);
+    setView(null);
   };
+
+  let screen;
+  if (view?.type === "chat") {
+    screen = <ChatScreen chat={selectedChat} onBack={closeView} openGroup={() => setView({ type: "group", chat: selectedChat })} openTrade={openTrade} openCaller={openCaller} focusCallKey={view.focusCallKey} />;
+  } else if (view?.type === "trade") {
+    screen = <TradeScreen token={selectedToken} onBack={closeView} onOpenCallMessage={openCallMessage} onOpenCaller={openCaller} />;
+  } else if (view?.type === "discover") {
+    screen = <DiscoverScreen onBack={closeView} openTrade={openTrade} />;
+  } else if (view?.type === "caller") {
+    screen = <CallerProfile caller={selectedCaller} onBack={closeView} />;
+  } else if (view?.type === "group") {
+    screen = <GroupProfile chat={selectedChat} onBack={closeView} openCaller={openCaller} openLeaderboard={() => setView({ type: "leaderboard" })} />;
+  } else if (view?.type === "notifications") {
+    screen = <NotificationsScreen onBack={closeView} />;
+  } else if (view?.type === "leaderboard") {
+    screen = <LeaderboardScreen onBack={closeView} openCaller={openCaller} />;
+  } else if (tab === "contacts") {
+    screen = <ContactsScreen />;
+  } else if (tab === "chats") {
+    screen = <ChatsScreen openChat={(chat) => setView({ type: "chat", chat })} />;
+  } else if (tab === "calls") {
+    screen = <CallsScreen openCaller={openCaller} />;
+  } else if (tab === "settings") {
+    screen = <SettingsScreen openNotifications={() => setView({ type: "notifications" })} />;
+  } else {
+    screen = <HomeScreen openTrade={openTrade} openDiscover={() => setView({ type: "discover" })} openCaller={openCaller} openNotifications={() => setView({ type: "notifications" })} openLeaderboard={() => setView({ type: "leaderboard" })} />;
+  }
+
+  const showTabs = !["chat", "trade", "caller", "group", "discover", "notifications", "leaderboard"].includes(view?.type);
+  const screenMode = view?.type ? `mode-${view.type}` : `mode-${tab}`;
 
   return (
-    <div style={{ width: "100%", height: "100%", background: T.bg, fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif', display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
-      {!authenticated ? (
-        <AuthScreen />
-      ) : (
-        <>
+    <div className="app-shell">
+      <div className="phone-frame">
+        <div className={`phone-screen ${screenMode}`}>
           <StatusBar />
-          <div ref={el => { if (el) el.style.cssText += "; view-transition-name: screen;"; }} style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>{renderContent()}</div>
-          <TabBar />
-          <Toast {...toast} />
-        </>
-      )}
+          <div className="screen-body">{screen}</div>
+          {showTabs ? <TabBar active={tab} onTab={switchTab} /> : null}
+        </div>
+      </div>
     </div>
   );
 }
