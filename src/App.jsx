@@ -4,6 +4,59 @@ import chatPattern from "./assets/chat-pattern.png";
 
 const U = ["#E66866", "#5DAB35", "#E0904D", "#2EA6DA", "#9A5BAA", "#2DAFA0", "#D27EAF", "#5C6AC4"];
 
+function svgData(svg) {
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+function colorFromText(text, offset = 0) {
+  const palette = ["#E66866", "#5DAB35", "#E0904D", "#2EA6DA", "#9A5BAA", "#2DAFA0", "#D27EAF", "#5C6AC4", "#34C759", "#FFB300"];
+  const sum = Array.from(String(text)).reduce((acc, char) => acc + char.charCodeAt(0), offset);
+  return palette[sum % palette.length];
+}
+
+function callerImage(caller) {
+  const name = caller?.name || "caller";
+  const bg = caller?.color?.startsWith("#") ? caller.color : colorFromText(name);
+  const accent = colorFromText(name, 17);
+  const initial = name.replace(/[^a-zA-Z0-9]/g, "").slice(0, 1).toUpperCase() || "C";
+  return svgData(`
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+      <defs>
+        <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+          <stop stop-color="${bg}"/><stop offset="1" stop-color="${accent}"/>
+        </linearGradient>
+      </defs>
+      <rect width="96" height="96" rx="48" fill="url(#g)"/>
+      <circle cx="48" cy="38" r="19" fill="rgba(255,255,255,.92)"/>
+      <path d="M17 86c6-20 18-31 31-31s25 11 31 31" fill="rgba(255,255,255,.92)"/>
+      <circle cx="38" cy="36" r="3" fill="#1f1f22"/><circle cx="58" cy="36" r="3" fill="#1f1f22"/>
+      <path d="M39 47c5 4 13 4 18 0" fill="none" stroke="#1f1f22" stroke-width="4" stroke-linecap="round"/>
+      <text x="48" y="84" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Arial" font-size="22" font-weight="800" fill="#fff">${initial}</text>
+    </svg>
+  `);
+}
+
+function tokenImage(token) {
+  const ticker = token?.ticker || "$TKN";
+  const symbol = ticker.replace("$", "").slice(0, 4).toUpperCase();
+  const bg = colorFromText(ticker);
+  const accent = colorFromText(token?.name || ticker, 31);
+  const shape = token?.marketType === "prediction" ? "M24 57c7-20 18-30 32-30 9 0 16 6 16 15 0 20-25 18-25 33" : "M48 16 80 34v28L48 80 16 62V34z";
+  return svgData(`
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+      <defs>
+        <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+          <stop stop-color="${bg}"/><stop offset="1" stop-color="${accent}"/>
+        </linearGradient>
+      </defs>
+      <rect width="96" height="96" rx="48" fill="url(#g)"/>
+      <path d="${shape}" fill="rgba(255,255,255,.22)" stroke="rgba(255,255,255,.78)" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="70" cy="25" r="8" fill="rgba(255,255,255,.30)"/>
+      <text x="48" y="58" text-anchor="middle" font-family="Menlo,Monaco,monospace" font-size="${symbol.length > 3 ? 22 : 28}" font-weight="800" fill="#fff">${symbol}</text>
+    </svg>
+  `);
+}
+
 const callerProfileDefaults = (name, id = 0) => ({
   username: `@${name.replace(/[^a-zA-Z0-9_]/g, "").toLowerCase() || "caller"}`,
   birthday: id % 3 === 0 ? "14 Aug 2001 (24 years old)" : id % 3 === 1 ? "7 Nov 1998 (27 years old)" : "2 Feb 2000 (26 years old)",
@@ -30,6 +83,24 @@ const GROUP_CALLERS = [
   { id: 12, name: "chainScout", wr: "59%", avg: "3.6x", pnl: "+$13.3K", calls: 47, wins: 28, losses: 19, color: "#9A5BAA" },
   { id: 13, name: "snipeSensei", wr: "57%", avg: "2.9x", pnl: "+$9.6K", calls: 41, wins: 23, losses: 18, color: "#E0904D" },
 ];
+
+const HARU_CALLER = {
+  id: 14,
+  name: "haru",
+  username: "@memetics6900",
+  birthday: "23 Mar 2004 (22 years old)",
+  status: "last seen today at 18:07",
+  meta: "CAVE member",
+  wr: "63%",
+  avg: "3.4x",
+  pnl: "+$8.2K",
+  calls: 34,
+  wins: 21,
+  losses: 13,
+  followers: "640",
+  color: U[4],
+  hiddenTrades: true,
+};
 
 const TOKENS = [
   { ticker: "$DEGEN", name: "DegenProtocol", change: "+184%", mc: "$420K", vol: "$1.2M", liq: "$85K", ath: "$0.0089", price: "$0.0042", calls: 15, color: "linear-gradient(135deg,#34C759,#2EA6DA)", data: [12, 15, 14, 18, 22, 20, 28, 35, 32, 38, 42, 45, 40, 48] },
@@ -231,16 +302,36 @@ const CALLER_TRADE_HISTORY = [
 ];
 
 const GROUP_LEADERBOARD = [
+  ["SOLTRENDING Elite", "+$912K", "83%", "18.8x", "#2DAFA0"],
+  ["Whale Room Tokyo", "+$801K", "81%", "16.4x", "#339DFF"],
+  ["Pump Prime", "+$744K", "79%", "15.2x", "#FFB300"],
+  ["Meme Syndicate", "+$690K", "78%", "14.9x", "#9A5BAA"],
+  ["Apex Perps", "+$612K", "76%", "13.1x", "#111111"],
+  ["Kalshi Macro Desk", "+$558K", "75%", "11.8x", "#2DAFA0"],
+  ["KOLscope Pro", "+$502K", "74%", "10.7x", "#339DFF"],
+  ["Daiko Factory", "+$468K", "73%", "10.2x", "#F7C76D"],
+  ["Hyperdash Flows", "+$421K", "72%", "9.6x", "#17171a"],
+  ["Soylana Manlets", "+$386K", "72%", "9.1x", "#E0904D"],
+  ["CryptoKudasaiJP", "+$344K", "71%", "8.8x", "#FFB300"],
+  ["Moby Mobile Product", "+$319K", "71%", "8.2x", "#5DAB35"],
+  ["Tony's calls", "+$301K", "69%", "6.1x", "linear-gradient(135deg,#050505,#339DFF)"],
   ["CAVE meme alpha group", "+$284K", "71%", "12.4x", "linear-gradient(135deg,#5C6AC4,#34C759)"],
-  ["Tony's calls", "+$221K", "68%", "5.9x", "linear-gradient(135deg,#050505,#339DFF)"],
-  ["Lin's Kalshi desk", "+$188K", "64%", "3.2x", "linear-gradient(135deg,#2DAFA0,#FFB300)"],
-  ["Daiko Factory", "+$142K", "62%", "7.8x", "#F7C76D"],
-  ["SOLTRENDING", "+$118K", "59%", "6.1x", "#2DAFA0"],
-  ["Hyperdash Flows", "+$96K", "57%", "4.4x", "#17171a"],
-  ["KOLscope", "+$82K", "55%", "3.9x", "#339DFF"],
-  ["Soylana Manlets", "+$74K", "53%", "2.8x", "#E0904D"],
-  ["CryptoKudasaiJP", "+$62K", "51%", "2.1x", "#FFB300"],
-  ["Moby Mobile Product", "+$48K", "49%", "1.8x", "#5DAB35"],
+  ["Lin's Kalshi desk", "+$271K", "68%", "5.9x", "linear-gradient(135deg,#2DAFA0,#FFB300)"],
+  ["Microcap Garden", "+$244K", "67%", "5.6x", "#D27EAF"],
+  ["BSC Watchtower", "+$221K", "66%", "5.1x", "#5C6AC4"],
+  ["Base Trenches", "+$204K", "65%", "4.9x", "#2EA6DA"],
+  ["Solana Sensei Room", "+$188K", "64%", "4.6x", "#5DAB35"],
+  ["Onchain Runners", "+$171K", "63%", "4.2x", "#E66866"],
+  ["Degen Research JP", "+$158K", "62%", "3.9x", "#E0904D"],
+  ["Alpha Breakfast", "+$144K", "61%", "3.7x", "#FFB300"],
+  ["Liquidity Hunters", "+$132K", "60%", "3.4x", "#2DAFA0"],
+  ["Chart Monks", "+$118K", "59%", "3.1x", "#339DFF"],
+  ["Perp Scouts", "+$104K", "58%", "2.9x", "#111111"],
+  ["Meme Radar", "+$92K", "57%", "2.7x", "#9A5BAA"],
+  ["Launchpad Watch", "+$81K", "56%", "2.5x", "#34C759"],
+  ["Tokyo Call Hub", "+$74K", "55%", "2.3x", "#5C6AC4"],
+  ["Kanto Degens", "+$63K", "54%", "2.1x", "#E0904D"],
+  ["Night Shift Alpha", "+$52K", "53%", "1.9x", "#D27EAF"],
 ];
 
 const CHAT_MESSAGES = {
@@ -288,9 +379,52 @@ const tokenDescription = (token) => {
   if (token.name.includes("Perp")) return `${token.name} is tracked from Hyperliquid call flow with live perp price, volume, and liquidation context.`;
   return `${token.name} is moving through Daikogram calls with live market, liquidity, and holder activity.`;
 };
+const callerFromMessage = (message) => {
+  if (!message?.user) return null;
+  if (message.user === "haru") return HARU_CALLER;
+  return GROUP_CALLERS.find((caller) => caller.name === message.user) || {
+    ...callerProfileDefaults(message.user, message.userId),
+    id: message.userId,
+    name: message.user,
+    color: callerColor(message.userId || 0),
+    meta: "Group member",
+    wr: "58%",
+    avg: "2.1x",
+    pnl: "+$1.2K",
+    calls: 12,
+    wins: 7,
+    losses: 5,
+    followers: "320",
+  };
+};
 const callerColor = (id) => U[id % U.length];
+const callerWalletAddress = (caller) => {
+  const seeds = [
+    "8J69rbVQZkT7sXv9mPQb4LwH3aNf2YxC6dE1pR5uAaK",
+    "3bYkAq9HnVwM7sLpQ4cT8Dr6ZxF2uNgPjE5mSaR1oKL",
+    "Gm7Rk2pQvL9xHaT5dC4nEw8YuB3sZfPq6JcM1tN9aV",
+    "5CtPqN8vYxL3mRa6KeF9sDg2WbU4hZjQp7AnT1cVsE",
+    "CAVEharuHiddenWalletMode1111111111111111111111",
+  ];
+  return seeds[(caller?.id || 0) % seeds.length];
+};
 const tokenInitial = (token) => token.ticker.replace("$", "").slice(0, 1);
 const tokenDisplay = (token) => token.marketType === "prediction" ? token.name : token.ticker;
+const CALL_MESSAGES = [
+  "Clean early flow. I like this while liquidity keeps building.",
+  "Entry is only valid if volume follows through in the next hour.",
+  "Small size. Good chart, but do not chase the first candle.",
+  "This one has the right holder mix for a second leg.",
+  "Momentum is strong, taking profit into the next spike.",
+  "Risk is higher here. Invalidation is below the last consolidation.",
+  "Whales are rotating in. Watching for a clean breakout.",
+  "Narrative is early and the market cap still gives room.",
+  "I am fading the crowd here unless buyers reclaim the prior high.",
+  "Good setup, but keep stop tight because liquidity is thin.",
+  "Looks like a stealth accumulation range before the next push.",
+  "Bad entry if you are late. Only scaling on pullbacks.",
+];
+const callMessageFor = (seed = 0) => CALL_MESSAGES[Math.abs(seed) % CALL_MESSAGES.length];
 
 function Icon({ name, size = 24 }) {
   const paths = {
@@ -305,6 +439,9 @@ function Icon({ name, size = 24 }) {
     history: "M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 7v5l3 2",
     star: "m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3z",
     share: "M12 3v12M7 8l5-5 5 5M5 13v6h14v-6",
+    deposit: "M12 3v12M7 10l5 5 5-5M5 19h14",
+    import: "M4 12h12M11 7l5 5-5 5M20 5v14",
+    send: "M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z",
     x: "M18 6 6 18M6 6l12 12",
     chevronDown: "m6 9 6 6 6-6",
     plus: "M12 5v14M5 12h14",
@@ -337,13 +474,16 @@ function Avatar({ label, color, size = "md", image }) {
 }
 
 function AvatarGroup({ count, max = 3, size = 18 }) {
-  const avatars = Array.from({ length: Math.min(count, max) }, (_, i) => ({ label: CALLERS[i % CALLERS.length].name[0].toUpperCase(), color: CALLERS[i % CALLERS.length].color }));
+  const avatars = Array.from({ length: Math.min(count, max) }, (_, i) => {
+    const caller = CALLERS[i % CALLERS.length];
+    return { label: caller.name[0].toUpperCase(), color: caller.color, image: callerImage(caller) };
+  });
   return (
     <span className="avatar-group">
       <span className="avatar-stack" aria-hidden="true">
         {avatars.map((avatar, index) => (
           <span key={`${avatar.label}-${index}`} className="avatar-mini" style={{ width: size, height: size, background: avatar.color, marginLeft: index ? -5 : 0, fontSize: Math.max(8, size * 0.48) }}>
-            {avatar.label}
+            <img src={avatar.image} alt="" />
           </span>
         ))}
       </span>
@@ -485,6 +625,91 @@ function StatusBar() {
   );
 }
 
+function AuthStatusBar({ back, onBack }) {
+  return (
+    <div className="auth-status-bar">
+      <div className="auth-status-time">11:30</div>
+      {back ? <button className="auth-back" type="button" onClick={onBack} aria-label="Back"><Icon name="back" size={34} /></button> : null}
+      <div className="auth-status-icons">
+        <span className="signal"><i /><i /><i /><i /></span>
+        <b>5G</b>
+        <span className="auth-battery"><b>89</b><i /></span>
+      </div>
+    </div>
+  );
+}
+
+function AuthLogo({ small = false }) {
+  return (
+    <span className={`auth-logo ${small ? "small" : ""}`} aria-hidden="true">
+      <svg viewBox="0 0 96 96">
+        <path d="M73 25 23 46c-3 1.3-2.9 5.7.2 6.8l13.5 4.7 5.2 16.4c.9 2.9 4.8 3.4 6.4.8l7.6-12.2 14.8 11c2.5 1.8 6 .4 6.6-2.6l8.5-40.6c.7-3.5-3.6-6.8-6.8-5.3zM39.4 54.5 70 34.8 46.1 61.7l-1.4 8.5-5.3-15.7z" />
+      </svg>
+    </span>
+  );
+}
+
+function AuthScreen({ onDone }) {
+  const [step, setStep] = useState("phone");
+  const [phone, setPhone] = useState("");
+  const [code, setCode] = useState("");
+  const normalizedPhone = phone.replace(/\D/g, "");
+  const formattedPhone = `+1 ${normalizedPhone || "4155550198"}`;
+  const submitPhone = (event) => {
+    event.preventDefault();
+    if (normalizedPhone.length < 5) return;
+    setStep("code");
+  };
+  const updateCode = (value) => {
+    const next = value.replace(/\D/g, "").slice(0, 5);
+    setCode(next);
+    if (next.length === 5) window.setTimeout(onDone, 120);
+  };
+
+  if (step === "code") {
+    return (
+      <main className="auth-screen">
+        <AuthStatusBar back onBack={() => setStep("phone")} />
+        <section className="auth-code-panel">
+          <AuthLogo small />
+          <h1>{formattedPhone}</h1>
+          <p>We have sent you a message with the code<br />to the number above.</p>
+          <label className="code-input-wrap">
+            <input value={code} onChange={(event) => updateCode(event.target.value)} inputMode="numeric" autoComplete="one-time-code" autoFocus aria-label="Confirmation code" />
+            <span className="code-boxes" aria-hidden="true">
+              {Array.from({ length: 5 }, (_, index) => <i key={index} className={code[index] ? "filled" : ""}>{code[index] || ""}</i>)}
+            </span>
+          </label>
+          <div className="auth-resend">Resend code in <b>0:60</b></div>
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <main className="auth-screen">
+      <AuthStatusBar />
+      <form className="auth-phone-panel" onSubmit={submitPhone}>
+        <AuthLogo />
+        <h1>Daikogram</h1>
+        <p>Please confirm your country code<br />and enter your phone number.</p>
+        <div className="auth-field country">
+          <span>🇺🇸</span>
+          <strong>United States</strong>
+          <em>+1</em>
+          <Icon name="back" size={26} />
+        </div>
+        <label className="auth-field phone">
+          <strong>+1</strong>
+          <i />
+          <input value={phone} onChange={(event) => setPhone(event.target.value.replace(/[^\d ]/g, ""))} inputMode="tel" autoComplete="tel-national" placeholder="Phone Number" autoFocus />
+        </label>
+        <button className="auth-next" type="submit" disabled={normalizedPhone.length < 5}>Next</button>
+      </form>
+    </main>
+  );
+}
+
 function HomeHeader({ title = "Daikogram", onDiscover, onNotify, onBack }) {
   return (
     <header className="home-header">
@@ -579,7 +804,7 @@ function FilterChips({ items, active, onChange }) {
   );
 }
 
-function PortfolioHero({ onTrade }) {
+function PortfolioHero() {
   return (
     <Card className="portfolio-hero">
       <div className="hero-tag">Daikogram Wallet <span>Hidden from contacts</span></div>
@@ -587,9 +812,9 @@ function PortfolioHero({ onTrade }) {
       <div className="delta-pill mono">▲ +$612.40 - +12.4%</div>
       <Sparkline data={[38, 40, 39, 43, 49, 47, 55, 61, 59, 67, 75, 83, 91, 89, 98, 105]} color="#34C759" height={58} />
       <div className="action-row">
-        <button type="button" className="action-button primary" onClick={onTrade}>Buy</button>
-        <button type="button" className="action-button">Send</button>
-        <button type="button" className="action-button">Swap</button>
+        <button type="button" className="action-button primary"><Icon name="deposit" size={18} />Deposit</button>
+        <button type="button" className="action-button"><Icon name="import" size={18} />Import</button>
+        <button type="button" className="action-button"><Icon name="send" size={18} />Send</button>
       </div>
     </Card>
   );
@@ -600,7 +825,7 @@ function TrendRow({ token, onOpen, onBuy }) {
   return (
     <div className="trend-row">
       <button className="trend-main" type="button" onClick={onOpen}>
-        <Avatar label={token.ticker[1]} color={token.color} size="md" />
+        <Avatar label={token.ticker[1]} color={token.color} size="md" image={tokenImage(token)} />
         <span className="trend-copy">
           <span className="trend-title">
             <b>{token.ticker}</b>
@@ -624,7 +849,7 @@ function CallerRow({ caller, rank, onClick }) {
   return (
     <Row onClick={onClick} className="caller-row">
       <span className={`rank mono ${rank === 1 ? "gold" : ""}`}>{rank}</span>
-      <Avatar label={caller.name[0].toUpperCase()} color={caller.color} size="sm" />
+      <Avatar label={caller.name[0].toUpperCase()} color={caller.color} size="sm" image={callerImage(caller)} />
       <span className="row-copy">
         <b>{caller.name}</b>
         <small><span className="mono">WR {caller.wr}</span> - Avg <span className="mono">{caller.avg}</span></small>
@@ -694,15 +919,20 @@ function SettingsRow({ item }) {
 }
 
 function CallCard({ caller, token, onTrade, onCaller }) {
+  const tags = token.ticker === "$DEGEN"
+    ? [["bad", "Bundle 15%"], ["warn", "Sniper 7%"], ["good", "Liq OK"]]
+    : [["good", "Bundle 2%"], ["warn", "Sniper 8%"], ["good", "Liq ok"]];
   return (
     <div className="call-message">
-      <button className="call-avatar" type="button" onClick={onCaller} style={{ background: caller.color }}>{caller.name[0].toUpperCase()}</button>
+      <button className="call-avatar" type="button" onClick={onCaller} style={{ background: caller.color }}>
+        <img src={callerImage(caller)} alt="" />
+      </button>
       <div className="call-card">
         <button className="call-sender" type="button" onClick={onCaller} style={{ color: caller.color }}>
           {caller.name}<span>- Top 10% - WR {caller.wr}</span>
         </button>
         <div className="call-token-row">
-          <Avatar label={token.ticker[1]} color={token.color} size="sm" />
+          <Avatar label={token.ticker[1]} color={token.color} size="sm" image={tokenImage(token)} />
           <span>
             <b>{token.ticker}</b>
             <small>{token.name}</small>
@@ -719,24 +949,24 @@ function CallCard({ caller, token, onTrade, onCaller }) {
         </div>
         <LiveSparkline data={token.data} color={token.change.startsWith("+") ? "#34C759" : "#FF3B30"} height={44} marker={token.ticker === "$DEGEN" ? { index: Math.floor(token.data.length / 2) } : null} />
         <div className="tag-row">
-          <span className="tag good">Bundle 2%</span>
-          <span className="tag warn">Sniper 8%</span>
-          <span className="tag good">Liq ok</span>
+          {tags.map(([kind, label]) => <span key={label} className={`tag ${kind}`}>{label}</span>)}
         </div>
-        <button type="button" className="call-cta" onClick={onTrade}>Trade {token.ticker} - 1-tap</button>
+        <button type="button" className="call-cta" onClick={onTrade}>Trade {token.ticker}</button>
         <time>14:30</time>
       </div>
     </div>
   );
 }
 
-function ChatTokenCard({ token, onTrade }) {
+function ChatTokenCard({ token, onTrade, own = true, sender }) {
   const isPrediction = token.marketType === "prediction";
   return (
-    <div className="chat-token-card-wrap own">
+    <div className={`chat-token-card-wrap ${own ? "own" : "incoming"}`}>
+      {!own ? <Avatar label={(sender || "T")[0].toUpperCase()} color={sender === "Lin" ? U[5] : "#111"} size="xs" image={callerImage({ name: sender || "Tony", color: sender === "Lin" ? U[5] : "#111" })} /> : null}
       <button className={`chat-token-card ${isPrediction ? "prediction-card" : ""}`} type="button" onClick={onTrade}>
+        {!own && sender ? <div className="chat-token-sender">{sender}</div> : null}
         <div className="chat-token-head">
-          <Avatar label={tokenInitial(token)} color={token.color} size="sm" />
+          <Avatar label={tokenInitial(token)} color={token.color} size="sm" image={tokenImage(token)} />
           <span>
             <b>{tokenDisplay(token)}</b>
             <small>{isPrediction ? `${token.market} prediction market` : token.name}</small>
@@ -765,14 +995,14 @@ function ChatTokenCard({ token, onTrade }) {
             </>
           )}
         </div>
-        <div className="chat-token-cta">{isPrediction ? "Open market · 1-tap" : `Buy ${token.ticker}`}</div>
-        <time>now ✓✓</time>
+        <div className="chat-token-cta">{isPrediction ? "Open market" : `Buy ${token.ticker}`}</div>
+        <time>{own ? "now ✓✓" : "now"}</time>
       </button>
     </div>
   );
 }
 
-function MessageBubble({ message }) {
+function MessageBubble({ message, onOpenCaller }) {
   if (message.type === "date") return <div className="date-pill">{message.label}</div>;
   if (message.type === "call") return <CallCard caller={message.caller} token={message.token} />;
   if (message.type === "token") return <ChatTokenCard token={message.token} onTrade={message.onTrade} />;
@@ -787,9 +1017,12 @@ function MessageBubble({ message }) {
     );
   }
   const color = callerColor(message.userId);
+  const caller = callerFromMessage(message);
   return (
     <div className="bubble-line">
-      <Avatar label={message.user[0].toUpperCase()} color={color} size="xs" />
+      <button className="message-avatar-button" type="button" onClick={() => caller && onOpenCaller?.(caller)} aria-label={`Open ${message.user} profile`}>
+        <Avatar label={message.user[0].toUpperCase()} color={color} size="xs" image={caller ? callerImage(caller) : undefined} />
+      </button>
       <div className="bubble">
         <b style={{ color }}>{message.user}</b>
         <p>{message.text}</p>
@@ -880,10 +1113,6 @@ function ChatScreen({ chat, onBack, openGroup, openTrade, openCaller, focusCallK
     <div className="chat-screen" style={{ backgroundImage: `url(${chatPattern})` }}>
       <ChatHeader title={chat.title} meta={chat.meta ?? "1,247 members, 89 online"} color={chat.color} onBack={onBack} onProfile={openGroup} />
       <div className="chat-wallpaper">
-        <div className="pinned-message">
-          <span><b>Pinned Message</b><small>$DEGEN entry thread and risk notes</small></span>
-          <span>pin</span>
-        </div>
         {localMessages.map((message, index) => {
           if (message.type === "call") {
             const callKey = `${message.caller.name}-${message.token.ticker}`;
@@ -894,9 +1123,10 @@ function ChatScreen({ chat, onBack, openGroup, openTrade, openCaller, focusCallK
             );
           }
           if (message.type === "token") {
-            return <ChatTokenCard key={index} token={message.token} onTrade={() => openTrade(message.token)} />;
+            const isOwnToken = chat.id === "cave";
+            return <ChatTokenCard key={index} token={message.token} onTrade={() => openTrade(message.token)} own={isOwnToken} sender={chat.id === "tony" ? "Tony" : chat.id === "lin" ? "Lin" : undefined} />;
           }
-          return <MessageBubble key={index} message={message} />;
+          return <MessageBubble key={index} message={message} onOpenCaller={openCaller} />;
         })}
       </div>
       <form className="chat-input" onSubmit={(event) => {
@@ -947,7 +1177,7 @@ function DiscoverScreen({ onBack, openTrade }) {
 function TokenAvatar({ token, size = "lg" }) {
   return (
     <span className={`token-avatar token-avatar-${size}`} style={{ background: token.color }} aria-hidden="true">
-      <span className="token-avatar-letter">{token.ticker.replace("$", "").slice(0, 1)}</span>
+      <img src={tokenImage(token)} alt="" />
       <span className="verified-dot">✓</span>
     </span>
   );
@@ -996,8 +1226,9 @@ function TokenLineChart({ token, compact = false, showCallers = false, onOpenCal
             if (event.key === "Enter" || event.key === " ") onOpenCaller?.(caller);
           }}
         >
-          <circle r="14" fill={caller.color} stroke="#fff" strokeWidth="3" />
-          <text y="4" textAnchor="middle">{caller.name[0].toUpperCase()}</text>
+          <clipPath id={`caller-clip-${caller.id}`}><circle r="14" /></clipPath>
+          <image href={callerImage(caller)} x="-14" y="-14" width="28" height="28" clipPath={`url(#caller-clip-${caller.id})`} />
+          <circle r="14" fill="none" stroke="#fff" strokeWidth="3" />
         </g>
       ))}
       <circle cx={width - 1} cy={points[points.length - 1].split(",")[1]} r="7" fill={chartColor} />
@@ -1069,10 +1300,11 @@ function TokenCallRow({ caller, token, index, onOpen }) {
   const groups = ["CAVE meme alpha group", "Daiko Factory", "SOLTRENDING", "KOLscope"];
   return (
     <button className="token-call-row" type="button" onClick={() => onOpen(caller, token)}>
-      <Avatar label={caller.name[0].toUpperCase()} color={caller.color} size="sm" />
+      <Avatar label={caller.name[0].toUpperCase()} color={caller.color} size="sm" image={callerImage(caller)} />
       <div>
         <strong>{caller.name}</strong>
         <span>Called at <b className="mono">{mc}</b></span>
+        <p className="call-message-preview">{callMessageFor(index)}</p>
         <p>{times[index % times.length]} · {groups[index % groups.length]}</p>
       </div>
       <em className="mono">{caller.wr} WR</em>
@@ -1319,12 +1551,13 @@ function ProfilePerformancePanel({ caller }) {
 function CallerCallsPanel({ caller }) {
   return (
     <section className="tg-profile-list-card profile-tab-panel">
-      {CALLER_CALL_HISTORY.map(([ticker, from, to, time, change, token]) => (
+      {CALLER_CALL_HISTORY.map(([ticker, from, to, time, change, token], index) => (
         <div className="profile-call-entry" key={`${ticker}-${time}`}>
-          <Avatar label={token.ticker[1]} color={token.color} size="sm" />
+          <Avatar label={token.ticker[1]} color={token.color} size="sm" image={tokenImage(token)} />
           <span>
             <b>{ticker}</b>
             <small>called at <em className="mono">{from}→{to} MC</em></small>
+            <p>{callMessageFor(index + caller.id)}</p>
           </span>
           <span className="profile-entry-result">
             <strong className={`mono ${change.startsWith("+") ? "green" : "red"}`}>{change}</strong>
@@ -1336,12 +1569,19 @@ function CallerCallsPanel({ caller }) {
   );
 }
 
-function CallerTradesPanel() {
+function CallerTradesPanel({ caller }) {
+  if (caller?.hiddenTrades) {
+    return (
+      <section className="tg-profile-list-card profile-tab-panel hidden-wallet-panel">
+        <p>The wallet is hidden mode.</p>
+      </section>
+    );
+  }
   return (
     <section className="tg-profile-list-card profile-tab-panel">
       {CALLER_TRADE_HISTORY.map(([ticker, name, pnl, percent, token]) => (
         <div className="profile-trade-entry" key={ticker}>
-          <Avatar label={ticker[1]} color={token.color} size="sm" />
+          <Avatar label={ticker[1]} color={token.color} size="sm" image={tokenImage(token)} />
           <span>
             <b>{ticker}</b>
             <small>{name}</small>
@@ -1416,7 +1656,7 @@ function GroupCallersPanel({ openCaller }) {
     <section className="tg-profile-list-card">
       {GROUP_CALLERS.map((caller) => (
         <button className="tg-profile-list-row" type="button" key={caller.name} onClick={() => openCaller?.(caller)}>
-          <Avatar label={caller.name[0].toUpperCase()} color={caller.color} size="md" />
+          <Avatar label={caller.name[0].toUpperCase()} color={caller.color} size="md" image={callerImage(caller)} />
           <span>
             <b>{caller.name}</b>
             <small className="mono">WR {caller.wr} · Avg {caller.avg}</small>
@@ -1433,7 +1673,7 @@ function GroupCallsPanel({ calls = GROUP_CALL_HISTORY }) {
     <section className="tg-profile-list-card group-calls-list">
       {calls.map(([caller, ticker, mc, time, token]) => (
         <div className="group-call-row" key={`${caller.name}-${ticker}-${time}`}>
-          <Avatar label={token.ticker[1]} color={token.color} size="sm" />
+          <Avatar label={token.ticker[1]} color={token.color} size="sm" image={tokenImage(token)} />
           <span>
             <b>{ticker}</b>
             <small>called by {caller.name} · <em className="mono">{mc}</em> · {time}</small>
@@ -1468,7 +1708,7 @@ function CallerProfile({ caller, onBack }) {
     <main className="tg-profile-screen caller-profile-screen">
       <ProfileBackButton onBack={onBack} />
       <section className="tg-profile-hero">
-        <Avatar label={profile.name[0].toUpperCase()} color={profile.color} size="lg" />
+        <Avatar label={profile.name[0].toUpperCase()} color={profile.color} size="lg" image={callerImage(profile)} />
         <h1>{profile.name}</h1>
         <p>{profile.status}</p>
       </section>
@@ -1485,10 +1725,18 @@ function CallerProfile({ caller, onBack }) {
         <button className="tg-info-link" type="button">Add to Contacts</button>
         <button className="tg-info-link danger" type="button">Block User</button>
       </ProfileInfoCard>
+      {!profile.hiddenTrades ? (
+        <ProfileInfoCard>
+          <div className="tg-info-row wallet-info-row">
+            <span><b>Wallet</b><a className="mono">{callerWalletAddress(profile)}</a></span>
+            <Icon name="wallet" size={28} />
+          </div>
+        </ProfileInfoCard>
+      ) : null}
       <ProfilePerformancePanel caller={caller} />
       <ProfileSegment items={["Calls", "Trades", "Posts", "Groups"]} active={activeTab} onChange={setActiveTab} />
       {activeTab === "Calls" ? <CallerCallsPanel caller={caller} /> : null}
-      {activeTab === "Trades" ? <CallerTradesPanel /> : null}
+      {activeTab === "Trades" ? <CallerTradesPanel caller={caller} /> : null}
       {activeTab === "Posts" ? <CallerPostsPanel /> : null}
       {activeTab === "Groups" ? <CallerGroupsPanel /> : null}
       <div className="bottom-spacer" />
@@ -1603,18 +1851,20 @@ function NotificationsScreen({ onBack }) {
   );
 }
 
-function LeaderboardScreen({ onBack, openCaller }) {
+function LeaderboardScreen({ onBack, openCaller, initialKind = "Callers" }) {
   const [period, setPeriod] = useState("1D");
-  const [kind, setKind] = useState("Callers");
-  const callerRows = [
-    ...CALLERS,
-    { name: "solanaSensei", wr: "69%", avg: "5.8x", pnl: "+$32.4K", calls: 78, wins: 54, losses: 24, color: U[6] },
-    { name: "pumpwatcher", wr: "66%", avg: "4.9x", pnl: "+$28.1K", calls: 91, wins: 60, losses: 31, color: U[7] },
-    { name: "perpTony", wr: "64%", avg: "3.7x", pnl: "+$24.8K", calls: 66, wins: 42, losses: 24, color: "#111" },
-    { name: "kalshiLin", wr: "61%", avg: "2.6x", pnl: "+$19.6K", calls: 58, wins: 35, losses: 23, color: U[5] },
-    { name: "memeMechanic", wr: "58%", avg: "3.1x", pnl: "+$15.2K", calls: 84, wins: 49, losses: 35, color: U[3] },
-    { name: "lowcapLily", wr: "55%", avg: "2.4x", pnl: "+$11.9K", calls: 73, wins: 40, losses: 33, color: U[2] },
-  ].slice(0, 10);
+  const [kind, setKind] = useState(initialKind);
+  const callerRows = Array.from({ length: 30 }, (_, index) => {
+    const base = GROUP_CALLERS[index % GROUP_CALLERS.length];
+    return index < GROUP_CALLERS.length ? base : {
+      ...base,
+      id: 100 + index,
+      name: `${base.name}${index + 1}`,
+      wr: `${Math.max(48, 74 - index)}%`,
+      avg: `${Math.max(1.2, 8.8 - index * 0.18).toFixed(1)}x`,
+      pnl: `+$${Math.max(18, 220 - index * 6)}K`,
+    };
+  });
   const rows = kind === "Callers" ? callerRows : GROUP_LEADERBOARD.map(([name, pnl, wr, avg, color]) => ({ name, pnl, wr, avg, color }));
   return (
     <main className="leaderboard-screen">
@@ -1636,7 +1886,7 @@ function LeaderboardScreen({ onBack, openCaller }) {
         {rows.map((row, index) => (
           <button className="leaderboard-row" type="button" key={row.name} onClick={() => kind === "Callers" && openCaller?.(row)}>
             <span className={`leaderboard-rank mono rank-${index + 1}`}>{index + 1}</span>
-            <Avatar label={row.name[0].toUpperCase()} color={row.color} size="sm" />
+            <Avatar label={row.name[0].toUpperCase()} color={row.color} size="sm" image={callerImage(row)} />
             <span>
               <b>{row.name}</b>
               <small className="mono">WR {row.wr} · Avg {row.avg}</small>
@@ -1674,11 +1924,24 @@ function TabBar({ active, onTab }) {
 }
 
 export default function App() {
+  const [authenticated, setAuthenticated] = useState(false);
   const [tab, setTab] = useState("chats");
   const [view, setView] = useState(null);
   const [selectedToken, setSelectedToken] = useState(TOKENS[0]);
   const [selectedCaller, setSelectedCaller] = useState(CALLERS[0]);
   const selectedChat = view?.type === "chat" || view?.type === "group" ? view.chat : CHATS[0];
+
+  if (!authenticated) {
+    return (
+      <div className="app-shell">
+        <div className="phone-frame">
+          <div className="phone-screen mode-auth">
+            <AuthScreen onDone={() => setAuthenticated(true)} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const openTrade = (token) => {
     setSelectedToken(typeof token === "object" && token?.ticker ? token : tokenBySymbol(token));
@@ -1711,11 +1974,11 @@ export default function App() {
   } else if (view?.type === "caller") {
     screen = <CallerProfile caller={selectedCaller} onBack={closeView} />;
   } else if (view?.type === "group") {
-    screen = <GroupProfile chat={selectedChat} onBack={closeView} openCaller={openCaller} openLeaderboard={() => setView({ type: "leaderboard" })} />;
+    screen = <GroupProfile chat={selectedChat} onBack={closeView} openCaller={openCaller} openLeaderboard={() => setView({ type: "leaderboard", initialKind: "Groups" })} />;
   } else if (view?.type === "notifications") {
     screen = <NotificationsScreen onBack={closeView} />;
   } else if (view?.type === "leaderboard") {
-    screen = <LeaderboardScreen onBack={closeView} openCaller={openCaller} />;
+    screen = <LeaderboardScreen onBack={closeView} openCaller={openCaller} initialKind={view.initialKind} />;
   } else if (tab === "contacts") {
     screen = <ContactsScreen />;
   } else if (tab === "chats") {
