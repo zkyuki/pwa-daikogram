@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import chatsBg from "./assets/chats-bg.png";
 import chatPattern from "./assets/chat-pattern.png";
+import cryptokidImage from "./assets/cryptokid-sol.jpg";
+import daikoAuthLogo from "./assets/daiko-auth-logo.png";
 
 const U = ["#E66866", "#5DAB35", "#E0904D", "#2EA6DA", "#9A5BAA", "#2DAFA0", "#D27EAF", "#5C6AC4"];
 
@@ -15,6 +17,7 @@ function colorFromText(text, offset = 0) {
 }
 
 function callerImage(caller) {
+  if (caller?.image) return caller.image;
   const name = caller?.name || "caller";
   const bg = caller?.color?.startsWith("#") ? caller.color : colorFromText(name);
   const accent = colorFromText(name, 17);
@@ -64,7 +67,7 @@ const callerProfileDefaults = (name, id = 0) => ({
 });
 
 const CALLERS = [
-  { id: 0, name: "cryptokid.sol", username: "@cryptokid_sol", birthday: "18 Sep 1999 (26 years old)", status: "online", meta: "Top 10% caller", wr: "74%", avg: "8.4x", pnl: "+$42.6K", calls: 127, wins: 94, losses: 33, followers: "2.1K", color: U[0] },
+  { id: 0, name: "cryptokid.sol", username: "@cryptokid_sol", birthday: "18 Sep 1999 (26 years old)", status: "online", meta: "Top 10% caller", wr: "74%", avg: "8.4x", pnl: "+$42.6K", calls: 127, wins: 94, losses: 33, followers: "2.1K", color: U[0], image: cryptokidImage },
   { id: 1, name: "alphahunter", username: "@alphahunter", birthday: "7 Nov 1998 (27 years old)", status: "last seen today at 18:07", meta: "Signal desk", wr: "81%", avg: "12.1x", pnl: "+$96.2K", calls: 89, wins: 72, losses: 17, followers: "4.8K", color: U[4] },
   { id: 2, name: "whalemaster", username: "@whalemaster", birthday: "2 Feb 2000 (26 years old)", status: "last seen 12 minutes ago", meta: "Large-cap caller", wr: "68%", avg: "4.2x", pnl: "+$18.9K", calls: 203, wins: 138, losses: 65, followers: "1.3K", color: U[5] },
   { id: 3, name: "degenking", username: "@degenking", birthday: "14 Aug 2001 (24 years old)", status: "last seen today at 17:48", meta: "Early memes", wr: "62%", avg: "6.7x", pnl: "+$11.4K", calls: 56, wins: 35, losses: 21, followers: "890", color: U[2] },
@@ -136,35 +139,44 @@ const DITT_TOKEN = {
 
 const ALL_TOKENS = [...TOKENS, DITT_TOKEN, ...Object.values(MARKET_TOKENS)];
 
+const CAVE_IMAGE = svgData(`
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+    <rect width="96" height="96" rx="24" fill="#fff"/>
+    <path d="M31 63V30c0-9 7-16 16-16h5c9 0 16 7 16 16v33c0 6-5 10-11 10H42c-6 0-11-4-11-10z" fill="#1f1f22"/>
+    <path d="M39 30c3 5 9 5 12 0M54 30c3 5 9 5 12 0M39 45c3 5 9 5 12 0M54 45c3 5 9 5 12 0" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+    <text x="48" y="86" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Arial" font-size="18" font-weight="900" fill="#1f1f22">CAVE</text>
+  </svg>
+`);
+
 const CHATS = [
-  { id: "cave", title: "CAVE meme alpha group", avatar: "C", color: "linear-gradient(135deg,#5C6AC4,#34C759)", message: "haru: $DITT flow looks clean", time: "18:31", unread: 763, meta: "3,146 members, 189 online" },
+  { id: "cave", title: "CAVE meme alpha group", avatar: "C", image: CAVE_IMAGE, color: "linear-gradient(135deg,#5C6AC4,#34C759)", message: "haru: $DITT flow looks clean", time: "18:31", unread: 763, meta: "3,146 members, 189 online" },
   { id: "tony", title: "Tony's calls (Hyperliquid perp)", avatar: "T", color: "linear-gradient(135deg,#050505,#339DFF)", message: "Tony: BTC long is still valid above 101.2K", time: "18:30", unread: 12, muted: true, meta: "" },
   { id: "lin", title: "Lin's insights for Kalshi", avatar: "L", color: "linear-gradient(135deg,#2DAFA0,#FFB300)", message: "Lin: FOMC cut odds moved too far", time: "18:28", unread: 4, meta: "" },
 ];
 
 const CONTACTS = [
-  { name: "Noah", meta: "last seen 4 minutes ago", avatar: "N", color: "#F3E96F", star: true },
-  { name: "Yutaro | JP Windfall", meta: "last seen 6 minutes ago", avatar: "Y", color: "#CAD2FF" },
-  { name: "Bee-utiful bee tomato", meta: "last seen 6 minutes ago", avatar: "B", color: "#F5D36D" },
-  { name: "256hax | Superteam JP", meta: "last seen 10 minutes ago", avatar: "2", color: "#EFA0BB" },
-  { name: "SEN UHI", meta: "last seen 35 minutes ago", avatar: "S", color: "#B7D4FF" },
-  { name: "Mike Eidlin", meta: "last seen 2 hours ago", avatar: "M", color: "#F8EAD7" },
-  { name: "Rocky Rocks 873", meta: "last seen 4 hours ago", avatar: "RR", color: "#86D477", star: true },
-  { name: "Fly", meta: "last seen 9 hours ago", avatar: "F", color: "#16171B" },
-  { name: "asuma | Daiko AI", meta: "last seen 11 hours ago", avatar: "A", color: "#5E7C5E", star: true },
-  { name: "Olivia Lo | BitGo (NYC)", meta: "last seen 12 hours ago", avatar: "O", color: "#F44336", star: true },
-  { name: "Thomukas1", meta: "last seen yesterday at 22:08", avatar: "T", color: "#75D7C8" },
+  { name: "Mina Takahashi", meta: "online", avatar: "M", color: "#F3E96F", star: true },
+  { name: "Leo Chen", meta: "last seen 7 minutes ago", avatar: "L", color: "#CAD2FF" },
+  { name: "Airi Nakamura", meta: "last seen 12 minutes ago", avatar: "A", color: "#F5D36D" },
+  { name: "Daniel Park", meta: "last seen 24 minutes ago", avatar: "D", color: "#EFA0BB" },
+  { name: "Hana Kim", meta: "last seen 41 minutes ago", avatar: "H", color: "#B7D4FF" },
+  { name: "Marco Rossi", meta: "last seen 2 hours ago", avatar: "M", color: "#F8EAD7" },
+  { name: "Sara Miller", meta: "last seen 3 hours ago", avatar: "S", color: "#86D477", star: true },
+  { name: "Jun Watanabe", meta: "last seen 6 hours ago", avatar: "J", color: "#16171B" },
+  { name: "Emma Wilson", meta: "last seen 9 hours ago", avatar: "E", color: "#5E7C5E", star: true },
+  { name: "Kai Mori", meta: "last seen yesterday at 22:08", avatar: "K", color: "#F44336" },
+  { name: "Nora Ellis", meta: "last seen recently", avatar: "N", color: "#75D7C8" },
 ];
 
 const RECENT_CALLS = [
-  { name: "Sam Sam | Aphelion", detail: "Outgoing (1 min)", date: "Fri", video: true, avatar: "S", color: "#93A4CC" },
-  { name: "Sam Sam | Aphelion", detail: "Outgoing", date: "Tue", video: true, avatar: "S", color: "#93A4CC" },
-  { name: "Sam Sam | Aphelion", detail: "Outgoing", date: "Tue", avatar: "S", color: "#93A4CC" },
-  { name: "Sam Sam | Aphelion", detail: "Outgoing (26 sec)", date: "04/30", avatar: "S", color: "#93A4CC" },
-  { name: "Sam Sam | Aphelion", detail: "Outgoing", date: "04/27", avatar: "S", color: "#93A4CC" },
-  { name: "Sam Sam | Aphelion", detail: "Outgoing (13 sec)", date: "04/04", avatar: "S", color: "#93A4CC" },
-  { name: "Yuma JP", detail: "Outgoing", date: "04/04", avatar: "Y", color: "#66D9D9" },
-  { name: "Atsushi", detail: "Outgoing", date: "04/04", avatar: "A", color: "#CDBBEB" },
+  { name: "Tony | Hyperliquid", detail: "Outgoing (1 min)", date: "Fri", video: true, avatar: "T", color: "#93A4CC" },
+  { name: "Lin | Kalshi Desk", detail: "Outgoing", date: "Tue", video: true, avatar: "L", color: "#66D9D9" },
+  { name: "cryptokid.sol", detail: "Outgoing", date: "Tue", avatar: "C", color: "#E66866" },
+  { name: "haru", detail: "Outgoing (26 sec)", date: "04/30", avatar: "H", color: "#CAD2FF" },
+  { name: "Riku | Solana Japan", detail: "Outgoing", date: "04/27", avatar: "R", color: "#B7D4FF" },
+  { name: "Maya from Drift", detail: "Outgoing (13 sec)", date: "04/04", avatar: "M", color: "#F8EAD7" },
+  { name: "Kenji Alpha", detail: "Outgoing", date: "04/04", avatar: "K", color: "#86D477" },
+  { name: "Nina | Hyperliquid", detail: "Outgoing", date: "04/04", avatar: "N", color: "#16171B" },
 ];
 
 const SETTINGS_GROUPS = [
@@ -256,7 +268,7 @@ const GROUP_PROFILES = {
     tabs: ["Callers", "Calls", "Members", "Media", "Saved"],
     calls: GROUP_CALL_HISTORY,
     stats: [["284", "Calls", "green"], ["71%", "Win rate", "green"], ["12.4x", "Avg return", "blue"]],
-    metrics: [["Volume", "$4.8M"], ["Callers", "43"], ["Global rank", "#14"]],
+    metrics: [["Volume", "$4.8M"], ["Callers", "43"], ["Global rank", "#6"]],
     pnl: "+$284K",
     chart: [10, 24, 18, 42, 38, 65, 58, 90, 84, 112, 108, 140, 135, 168],
   },
@@ -307,6 +319,7 @@ const GROUP_LEADERBOARD = [
   ["Pump Prime", "+$744K", "79%", "15.2x", "#FFB300"],
   ["Meme Syndicate", "+$690K", "78%", "14.9x", "#9A5BAA"],
   ["Apex Perps", "+$612K", "76%", "13.1x", "#111111"],
+  ["CAVE meme alpha group", "+$584K", "71%", "12.4x", "linear-gradient(135deg,#5C6AC4,#34C759)"],
   ["Kalshi Macro Desk", "+$558K", "75%", "11.8x", "#2DAFA0"],
   ["KOLscope Pro", "+$502K", "74%", "10.7x", "#339DFF"],
   ["Daiko Factory", "+$468K", "73%", "10.2x", "#F7C76D"],
@@ -315,7 +328,6 @@ const GROUP_LEADERBOARD = [
   ["CryptoKudasaiJP", "+$344K", "71%", "8.8x", "#FFB300"],
   ["Moby Mobile Product", "+$319K", "71%", "8.2x", "#5DAB35"],
   ["Tony's calls", "+$301K", "69%", "6.1x", "linear-gradient(135deg,#050505,#339DFF)"],
-  ["CAVE meme alpha group", "+$284K", "71%", "12.4x", "linear-gradient(135deg,#5C6AC4,#34C759)"],
   ["Lin's Kalshi desk", "+$271K", "68%", "5.9x", "linear-gradient(135deg,#2DAFA0,#FFB300)"],
   ["Microcap Garden", "+$244K", "67%", "5.6x", "#D27EAF"],
   ["BSC Watchtower", "+$221K", "66%", "5.1x", "#5C6AC4"],
@@ -642,9 +654,7 @@ function AuthStatusBar({ back, onBack }) {
 function AuthLogo({ small = false }) {
   return (
     <span className={`auth-logo ${small ? "small" : ""}`} aria-hidden="true">
-      <svg viewBox="0 0 96 96">
-        <path d="M73 25 23 46c-3 1.3-2.9 5.7.2 6.8l13.5 4.7 5.2 16.4c.9 2.9 4.8 3.4 6.4.8l7.6-12.2 14.8 11c2.5 1.8 6 .4 6.6-2.6l8.5-40.6c.7-3.5-3.6-6.8-6.8-5.3zM39.4 54.5 70 34.8 46.1 61.7l-1.4 8.5-5.3-15.7z" />
-      </svg>
+      <img src={daikoAuthLogo} alt="" />
     </span>
   );
 }
@@ -749,7 +759,7 @@ function HeaderSegment({ value, onChange, items }) {
   );
 }
 
-function ChatHeader({ title, meta, color, onBack, onProfile }) {
+function ChatHeader({ title, meta, color, image, onBack, onProfile }) {
   return (
     <header className="chat-header">
       <button className="pill chat-back" onClick={onBack} type="button" aria-label="Back">
@@ -761,7 +771,7 @@ function ChatHeader({ title, meta, color, onBack, onProfile }) {
         {meta ? <small>{meta}</small> : null}
       </button>
       <button className="avatar-button" onClick={onProfile} type="button" aria-label="Open profile">
-        <Avatar label={title[0]} color={color} size="sm" />
+        <Avatar label={title[0]} color={color} size="sm" image={image} />
       </button>
     </header>
   );
@@ -865,7 +875,7 @@ function CallerRow({ caller, rank, onClick }) {
 function ChatListRow({ chat, onClick }) {
   return (
     <Row onClick={onClick} className="telegram-list-row chat-list-row">
-      <Avatar label={chat.avatar} color={chat.color} size="md" />
+      <Avatar label={chat.avatar} color={chat.color} size="md" image={chat.image} />
       <span className="row-copy">
         <b>{chat.title} {chat.muted ? <span className="muted-dot">muted</span> : null}</b>
         <small>{chat.message}</small>
@@ -922,15 +932,21 @@ function CallCard({ caller, token, onTrade, onCaller }) {
   const tags = token.ticker === "$DEGEN"
     ? [["bad", "Bundle 15%"], ["warn", "Sniper 7%"], ["good", "Liq OK"]]
     : [["good", "Bundle 2%"], ["warn", "Sniper 8%"], ["good", "Liq ok"]];
+  const roles = caller.id === 0 ? ["Top 10%", "WR 74%"] : [caller.id === 1 ? "admin" : "caller"];
   return (
     <div className="call-message">
       <button className="call-avatar" type="button" onClick={onCaller} style={{ background: caller.color }}>
         <img src={callerImage(caller)} alt="" />
       </button>
       <div className="call-card">
-        <button className="call-sender" type="button" onClick={onCaller} style={{ color: caller.color }}>
-          {caller.name}<span>- Top 10% - WR {caller.wr}</span>
-        </button>
+        <div className="call-sender-row">
+          <button className="call-sender" type="button" onClick={onCaller} style={{ color: caller.color }}>
+            {caller.name}
+          </button>
+          <span className="call-role-badges">
+            {roles.map((role) => <span key={role} className="call-role-badge">{role}</span>)}
+          </span>
+        </div>
         <div className="call-token-row">
           <Avatar label={token.ticker[1]} color={token.color} size="sm" image={tokenImage(token)} />
           <span>
@@ -1100,7 +1116,15 @@ function ChatsScreen({ openChat }) {
 function ChatScreen({ chat, onBack, openGroup, openTrade, openCaller, focusCallKey }) {
   const [draft, setDraft] = useState(chat.id === "cave" ? "2R2F91ewRgZ6R33TcCDebK6Lh6pVTzAKgiURcpgVpump" : "");
   const [localMessages, setLocalMessages] = useState(() => CHAT_MESSAGES[chat.id] || MESSAGES);
+  const [showSendHint, setShowSendHint] = useState(false);
   const callRefs = useRef({});
+  useEffect(() => {
+    if (sessionStorage.getItem("daiko-send-hint-seen")) return;
+    setShowSendHint(true);
+    sessionStorage.setItem("daiko-send-hint-seen", "1");
+    const timer = window.setTimeout(() => setShowSendHint(false), 6500);
+    return () => window.clearTimeout(timer);
+  }, []);
   useEffect(() => {
     setLocalMessages(CHAT_MESSAGES[chat.id] || MESSAGES);
     setDraft(chat.id === "cave" ? "2R2F91ewRgZ6R33TcCDebK6Lh6pVTzAKgiURcpgVpump" : "");
@@ -1111,7 +1135,7 @@ function ChatScreen({ chat, onBack, openGroup, openTrade, openCaller, focusCallK
   }, [focusCallKey]);
   return (
     <div className="chat-screen" style={{ backgroundImage: `url(${chatPattern})` }}>
-      <ChatHeader title={chat.title} meta={chat.meta ?? "1,247 members, 89 online"} color={chat.color} onBack={onBack} onProfile={openGroup} />
+      <ChatHeader title={chat.title} meta={chat.meta ?? "1,247 members, 89 online"} color={chat.color} image={chat.image} onBack={onBack} onProfile={openGroup} />
       <div className="chat-wallpaper">
         {localMessages.map((message, index) => {
           if (message.type === "call") {
@@ -1131,6 +1155,7 @@ function ChatScreen({ chat, onBack, openGroup, openTrade, openCaller, focusCallK
       </div>
       <form className="chat-input" onSubmit={(event) => {
         event.preventDefault();
+        setShowSendHint(false);
         const text = draft.trim();
         if (!text) return;
         if (text === "2R2F91ewRgZ6R33TcCDebK6Lh6pVTzAKgiURcpgVpump") {
@@ -1142,9 +1167,23 @@ function ChatScreen({ chat, onBack, openGroup, openTrade, openCaller, focusCallK
       }}>
         <label className="chat-compose">
           <Icon name="paperclip" size={22} />
-          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Message" />
+          <input
+            value={draft}
+            onFocus={() => setShowSendHint(false)}
+            onChange={(event) => {
+              setShowSendHint(false);
+              setDraft(event.target.value);
+            }}
+            placeholder="Message"
+          />
           <span>:-)</span>
         </label>
+        {showSendHint ? (
+          <div className="send-hint" aria-hidden="true">
+            <span>Send</span>
+            <i />
+          </div>
+        ) : null}
         <button className="mic-button" type="submit" aria-label="Send message"><Icon name={draft ? "plus" : "mic"} size={21} /></button>
       </form>
     </div>
@@ -1365,19 +1404,13 @@ function TokenDetailScreen({ token, onBack, onBuy, onOpenCallMessage, onOpenCall
   const positive = token.change.startsWith("+");
   return (
     <main className="token-screen">
-      <TokenTopBar token={token} onBack={onBack} compact={tab !== "Calls"} />
-      <div className={`token-scroll ${tab === "About" ? "about-mode" : ""}`}>
-        {tab === "Calls" ? (
-          <>
-            <section className="token-price-hero">
-              <div><strong className="mono">{token.price}</strong><span className={`mono ${positive ? "up" : "down"}`}>{positive ? "▲" : "▼"} {token.change.replace("+", "")} <em>Past hour</em></span></div>
-              <div><strong className="mono">{token.mc}</strong><span>Market cap</span></div>
-            </section>
-            <TokenLineChart token={token} showCallers onOpenCaller={onOpenCaller} />
-          </>
-        ) : (
-          <TokenLineChart token={token} compact />
-        )}
+      <TokenTopBar token={token} onBack={onBack} />
+      <div className="token-scroll">
+        <section className="token-price-hero">
+          <div><strong className="mono">{token.price}</strong><span className={`mono ${positive ? "up" : "down"}`}>{positive ? "▲" : "▼"} {token.change.replace("+", "")} <em>Past hour</em></span></div>
+          <div><strong className="mono">{token.mc}</strong><span>Market cap</span></div>
+        </section>
+        <TokenLineChart token={token} showCallers onOpenCaller={onOpenCaller} />
         <TokenTimeframes />
         <TokenTabBar active={tab} onChange={setTab} />
         {tab === "Calls" ? (
@@ -1854,9 +1887,20 @@ function NotificationsScreen({ onBack }) {
 function LeaderboardScreen({ onBack, openCaller, initialKind = "Callers" }) {
   const [period, setPeriod] = useState("1D");
   const [kind, setKind] = useState(initialKind);
+  const [category, setCategory] = useState("Meme");
+  const groupCategory = (name) => {
+    if (/kalshi|macro|predict|lin/i.test(name)) return "Predict";
+    if (/perp|tony|hyper|apex|scout/i.test(name)) return "Perp";
+    return "Meme";
+  };
+  const callerCategory = (caller) => {
+    if (/tony|perp/i.test(caller.name)) return "Perp";
+    if (/lin|kalshi/i.test(caller.name)) return "Predict";
+    return "Meme";
+  };
   const callerRows = Array.from({ length: 30 }, (_, index) => {
     const base = GROUP_CALLERS[index % GROUP_CALLERS.length];
-    return index < GROUP_CALLERS.length ? base : {
+    const row = index < GROUP_CALLERS.length ? base : {
       ...base,
       id: 100 + index,
       name: `${base.name}${index + 1}`,
@@ -1864,8 +1908,18 @@ function LeaderboardScreen({ onBack, openCaller, initialKind = "Callers" }) {
       avg: `${Math.max(1.2, 8.8 - index * 0.18).toFixed(1)}x`,
       pnl: `+$${Math.max(18, 220 - index * 6)}K`,
     };
+    return { ...row, category: callerCategory(row), rank: index + 1 };
   });
-  const rows = kind === "Callers" ? callerRows : GROUP_LEADERBOARD.map(([name, pnl, wr, avg, color]) => ({ name, pnl, wr, avg, color }));
+  const rows = (kind === "Callers" ? callerRows : GROUP_LEADERBOARD.map(([name, pnl, wr, avg, color], index) => ({
+    name,
+    pnl,
+    wr,
+    avg,
+    color,
+    category: groupCategory(name),
+    rank: index + 1,
+    image: name === "CAVE meme alpha group" ? CAVE_IMAGE : undefined,
+  }))).filter((row) => row.category === category);
   return (
     <main className="leaderboard-screen">
       <header className="leaderboard-header">
@@ -1882,11 +1936,16 @@ function LeaderboardScreen({ onBack, openCaller, initialKind = "Callers" }) {
           <button key={item} type="button" className={kind === item ? "active" : ""} onClick={() => setKind(item)}>{item}</button>
         ))}
       </div>
+      <div className="leaderboard-category">
+        {["Meme", "Perp", "Predict"].map((item) => (
+          <button key={item} type="button" className={category === item ? "active" : ""} onClick={() => setCategory(item)}>{item}</button>
+        ))}
+      </div>
       <section className="tg-card leaderboard-list">
         {rows.map((row, index) => (
           <button className="leaderboard-row" type="button" key={row.name} onClick={() => kind === "Callers" && openCaller?.(row)}>
-            <span className={`leaderboard-rank mono rank-${index + 1}`}>{index + 1}</span>
-            <Avatar label={row.name[0].toUpperCase()} color={row.color} size="sm" image={callerImage(row)} />
+            <span className={`leaderboard-rank mono rank-${row.rank || index + 1}`}>{row.rank || index + 1}</span>
+            <Avatar label={row.name[0].toUpperCase()} color={row.color} size="sm" image={row.image || callerImage(row)} />
             <span>
               <b>{row.name}</b>
               <small className="mono">WR {row.wr} · Avg {row.avg}</small>
